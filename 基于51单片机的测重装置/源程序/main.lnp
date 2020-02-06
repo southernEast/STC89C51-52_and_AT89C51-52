@@ -1,0 +1,6 @@
+"main.obj",
+"LCD1602.obj",
+"HX711.obj",
+"EEPROM.obj" 
+TO "main" 
+RAMSIZE(256) 

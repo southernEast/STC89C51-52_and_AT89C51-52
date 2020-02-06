@@ -1,0 +1,84 @@
+C51 COMPILER V9.53.0.0   EEPROM                                                            04/22/2019 21:22:41 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE EEPROM
+OBJECT MODULE PLACED IN EEPROM.OBJ
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE EEPROM.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include "EEPROM.H"
+   2          
+   3          /* ================ 打开 ISP,IAP 功能 ================= */
+   4          void ISP_IAP_enable(void)
+   5          {
+   6   1      EA = 0;       /* 关中断   */
+   7   1      ISP_CONTR = ISP_CONTR & 0x18;       /* 0001,1000 */
+   8   1      ISP_CONTR = ISP_CONTR | WaitTime; /* 写入硬件延时 */
+   9   1      ISP_CONTR = ISP_CONTR | 0x80;       /* ISPEN=1  */
+  10   1      }
+  11          /* =============== 关闭 ISP,IAP 功能 ================== */
+  12          void ISP_IAP_disable(void)
+  13          {
+  14   1      ISP_CONTR = ISP_CONTR & 0x7f; /* ISPEN = 0 */
+  15   1      ISP_TRIG = 0x00;
+  16   1      EA   =   1;   /* 开中断 */
+  17   1      }
+  18          /* ================ 公用的触发代码 ==================== */
+  19          void ISPgoon(void)
+  20          {
+  21   1      ISP_IAP_enable();   /* 打开 ISP,IAP 功能 */
+  22   1      ISP_TRIG = 0x46;  /* 触发ISP_IAP命令字节1 */
+  23   1      ISP_TRIG = 0xb9;  /* 触发ISP_IAP命令字节2 */
+  24   1      _nop_();
+  25   1      }
+  26          /* ==================== 字节读 ======================== */
+  27          unsigned char byte_read(unsigned int byte_addr)
+  28          {
+  29   1      ISP_ADDRH = (unsigned char)(byte_addr >> 8);/* 地址赋值 */
+  30   1      ISP_ADDRL = (unsigned char)(byte_addr & 0x00ff);
+  31   1      ISP_CMD   = ISP_CMD & 0xf8;   /* 清除低3位  */
+  32   1      ISP_CMD   = ISP_CMD | RdCommand; /* 写入读命令 */
+  33   1      ISPgoon();       /* 触发执行  */
+  34   1      ISP_IAP_disable();    /* 关闭ISP,IAP功能 */
+  35   1      return (ISP_DATA);    /* 返回读到的数据 */
+  36   1      }
+  37          /* ================== 扇区擦除 ======================== */
+  38          void SectorErase(unsigned int sector_addr)
+  39          {
+  40   1      unsigned int iSectorAddr;
+  41   1      iSectorAddr = (sector_addr & 0xfe00); /* 取扇区地址 */
+  42   1      ISP_ADDRH = (unsigned char)(iSectorAddr >> 8);
+  43   1      ISP_ADDRL = 0x00;
+  44   1      ISP_CMD = ISP_CMD & 0xf8;   /* 清空低3位  */
+  45   1      ISP_CMD = ISP_CMD | EraseCommand; /* 擦除命令3  */
+  46   1      ISPgoon();       /* 触发执行  */
+  47   1      ISP_IAP_disable();    /* 关闭ISP,IAP功能 */
+  48   1      }
+  49          /* ==================== 字节写 ======================== */
+  50          void byte_write(unsigned int byte_addr, unsigned char original_data)
+  51          {
+  52   1      ISP_ADDRH = (unsigned char)(byte_addr >> 8);  /* 取地址  */
+  53   1      ISP_ADDRL = (unsigned char)(byte_addr & 0x00ff);
+  54   1      ISP_CMD  = ISP_CMD & 0xf8;    /* 清低3位 */
+  55   1      ISP_CMD  = ISP_CMD | PrgCommand;  /* 写命令2 */
+C51 COMPILER V9.53.0.0   EEPROM                                                            04/22/2019 21:22:41 PAGE 2   
+
+  56   1      ISP_DATA = original_data;   /* 写入数据准备 */
+  57   1      ISPgoon();       /* 触发执行  */
+  58   1      ISP_IAP_disable();     /* 关闭IAP功能 */
+  59   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    100    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

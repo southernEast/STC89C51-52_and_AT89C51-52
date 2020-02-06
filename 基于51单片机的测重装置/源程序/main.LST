@@ -1,0 +1,507 @@
+C51 COMPILER V9.53.0.0   MAIN                                                              05/19/2019 22:20:42 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN main.OBJ
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include "main.h"
+   2          #include "LCD1602.h"
+   3          #include "HX711.h"
+   4          #include "EEPROM.H"
+   5          
+   6          //定义变量
+   7          unsigned char KEY_NUM = 0;   //用来存放按键按下的键值
+   8          unsigned long HX711_Buffer = 0;  //用来存放HX711读取出来的数据
+   9          unsigned long Weight_Maopi = 0; //用来存放毛皮数据
+  10          long Weight_Shiwu = 0;          //用来存放实物重量
+  11          long Max_Value = 1;             //用来存放设置最大值
+  12          unsigned int maxValueTable[6] = {0};
+  13          unsigned char state = 0;    //用来存放设置状态
+  14          unsigned char Blink_Speed = 0;
+  15          #define Blink_Speed_Max 6          //该值可以改变设置指针闪烁频率
+  16          
+  17          #define GapValue 24.5
+  18          
+  19          //报警值，单位是g
+  20          #define AlarmValue 200000     
+  21          
+  22          
+  23          
+  24          //****************************************************
+  25          //主函数
+  26          //****************************************************
+  27          void main()
+  28          {
+  29   1        Init_LCD1602();               //初始化LCD1602
+  30   1      
+  31   1        LCD1602_write_com(0x80);      //设置LCD1602指针 初始化显示
+  32   1        LCD1602_write_word("Welcome to use! ");
+  33   1        LCD1602_write_com(0x80 + 0x40); 
+  34   1        LCD1602_write_word("Designed by LiuS");
+  35   1        play_record(3);
+  36   1      
+  37   1        
+  38   1        Get_Maopi();
+  39   1        Get_Maopi();
+  40   1        Delay_ms(2000);               //延时2s
+  41   1        Get_Maopi();
+  42   1        Get_Maopi();                  //称毛皮重  多次测量有利于HX711稳定
+  43   1        LCD1602_write_com(0x01);      //清屏
+  44   1          
+  45   1        //读取EEPROM中保存的报警值
+  46   1        maxValueTable[0] = byte_read(0x2000);
+  47   1        maxValueTable[1] = byte_read(0x2001);
+  48   1        maxValueTable[2] = byte_read(0x2002);
+  49   1        maxValueTable[3] = byte_read(0x2003);
+  50   1        maxValueTable[4] = byte_read(0x2004);
+  51   1        maxValueTable[5] = byte_read(0x2005);
+  52   1        Max_Value = (long)maxValueTable[0]*100000+(long)maxValueTable[1]*10000+(long)maxValueTable[2]*1000+(long)
+             -maxValueTable[3]*100+(long)maxValueTable[4]*10+(long)maxValueTable[5]; 
+  53   1          
+  54   1        while(1)
+C51 COMPILER V9.53.0.0   MAIN                                                              05/19/2019 22:20:42 PAGE 2   
+
+  55   1        { 
+  56   2          Get_Weight();   
+  57   2          receive();                  // 接收温湿度传感器信号
+  58   2          //显示当前重量
+  59   2          LCD1602_write_com(0x80);
+  60   2          LCD1602_write_word("Weight=");
+  61   2          LCD1602_write_data(Weight_Shiwu/100000 + 0x30);
+  62   2          LCD1602_write_data(Weight_Shiwu%100000/10000 + 0x30);
+  63   2          LCD1602_write_data(Weight_Shiwu%10000/1000 + 0x30);
+  64   2          LCD1602_write_data('.');
+  65   2          LCD1602_write_data(Weight_Shiwu%1000/100 + 0x30);
+  66   2          LCD1602_write_data(Weight_Shiwu%100/10 + 0x30);
+  67   2          LCD1602_write_data(Weight_Shiwu%10 + 0x30);        
+  68   2          LCD1602_write_word("Kg");
+  69   2      
+  70   2          KEY_NUM = Scan_Key();   // 按键扫描
+  71   2          if(KEY_NUM == 1)        // 按键1切换设置状态
+  72   2          {
+  73   3              state++;
+  74   3              if(state == 7)
+  75   3              {
+  76   4                  state = 0;
+  77   4                  SectorErase(0x2000);
+  78   4                  byte_write(0x2000,maxValueTable[0]);        //保存EEPROM数据
+  79   4                  byte_write(0x2001,maxValueTable[1]);
+  80   4                  byte_write(0x2002,maxValueTable[2]);        //保存EEPROM数据
+  81   4                  byte_write(0x2003,maxValueTable[3]);
+  82   4                  byte_write(0x2004,maxValueTable[4]);
+  83   4                  byte_write(0x2005,maxValueTable[5]);
+  84   4                  Max_Value = (long)maxValueTable[0]*100000+(long)maxValueTable[1]*10000+(long)maxValueTable[2]*1000+(
+             -long)maxValueTable[3]*100+(long)maxValueTable[4]*10+(long)maxValueTable[5];     //计算超限报警界限值        
+  85   4              }
+  86   3          }
+  87   2          if(KEY_NUM == 2)        //按键加
+  88   2          {
+  89   3              if(state != 0)
+  90   3              {
+  91   4                  maxValueTable[state-1]++;
+  92   4                  if(maxValueTable[state-1] > 9)
+  93   4                  {
+  94   5                      maxValueTable[state-1] = 0;
+  95   5                  }
+  96   4              }
+  97   3              
+  98   3          }
+  99   2          if(KEY_NUM == 3)        //按键减
+ 100   2          {
+ 101   3              if(state != 0)
+ 102   3              {
+ 103   4                  maxValueTable[state-1]--;
+ 104   4                  if(maxValueTable[state-1] < 0)
+ 105   4                  {
+ 106   5                      maxValueTable[state-1] = 9;
+ 107   5                  }
+ 108   4              }
+ 109   3          }
+ 110   2          if(KEY_NUM == 4 && Weight_Shiwu != 0)             // 乘客下车且有行李
+ 111   2          {
+ 112   3            play_record(1); 
+ 113   3          }
+ 114   2                
+ 115   2          if(state != 0)          // 调整模式
+C51 COMPILER V9.53.0.0   MAIN                                                              05/19/2019 22:20:42 PAGE 3   
+
+ 116   2          {
+ 117   3            Blink_Speed++;
+ 118   3            if(Blink_Speed == Blink_Speed_Max)
+ 119   3            {
+ 120   4                Blink_Speed = 0;
+ 121   4            }
+ 122   3          }
+ 123   2          switch(state)
+ 124   2          {
+ 125   3              case 0:
+ 126   3                  LCD1602_write_com(0x80+0x40);
+ 127   3                  LCD1602_write_word("M");
+ 128   3                  LCD1602_write_data('0' + maxValueTable[0]);
+ 129   3                  LCD1602_write_data('0' + maxValueTable[1]);             
+ 130   3                  LCD1602_write_data('0' + maxValueTable[2]);
+ 131   3                  LCD1602_write_data('.');
+ 132   3                  LCD1602_write_data('0' + maxValueTable[3]);
+ 133   3                  LCD1602_write_data('0' + maxValueTable[4]);
+ 134   3                  LCD1602_write_data('0' + maxValueTable[5]);
+ 135   3                  display_tem();
+ 136   3                  break;
+ 137   3              case 1:
+ 138   3                  LCD1602_write_com(0x80+0x40);
+ 139   3                  LCD1602_write_word("M");
+ 140   3                  if(Blink_Speed < Blink_Speed_Max/2)
+ 141   3                  {
+ 142   4                      LCD1602_write_data('0' + maxValueTable[0]);
+ 143   4                  }
+ 144   3                  else
+ 145   3                  {
+ 146   4                      LCD1602_write_data(' ');
+ 147   4                  }
+ 148   3                  LCD1602_write_data('0' + maxValueTable[1]);             
+ 149   3                  LCD1602_write_data('0' + maxValueTable[2]);
+ 150   3                  LCD1602_write_data('.');
+ 151   3                  LCD1602_write_data('0' + maxValueTable[3]);
+ 152   3                  LCD1602_write_data('0' + maxValueTable[4]);
+ 153   3                  LCD1602_write_data('0' + maxValueTable[5]);
+ 154   3                  display_tem();
+ 155   3                  break;
+ 156   3              case 2:
+ 157   3                  LCD1602_write_com(0x80+0x40);
+ 158   3                  LCD1602_write_word("M");               
+ 159   3                  LCD1602_write_data('0' + maxValueTable[0]);
+ 160   3                  if(Blink_Speed < Blink_Speed_Max/2)
+ 161   3                  {
+ 162   4                    LCD1602_write_data('0' + maxValueTable[1]);             
+ 163   4                  }
+ 164   3                  else
+ 165   3                  {
+ 166   4                      LCD1602_write_data(' ');
+ 167   4                  }
+ 168   3                  LCD1602_write_data('0' + maxValueTable[2]);
+ 169   3                  LCD1602_write_data('.');               
+ 170   3                  LCD1602_write_data('0' + maxValueTable[3]);
+ 171   3                  LCD1602_write_data('0' + maxValueTable[4]);
+ 172   3                  LCD1602_write_data('0' + maxValueTable[5]);
+ 173   3                  display_tem();
+ 174   3                  break;
+ 175   3              case 3:
+ 176   3                  LCD1602_write_com(0x80+0x40);
+ 177   3                  LCD1602_write_word("M");
+C51 COMPILER V9.53.0.0   MAIN                                                              05/19/2019 22:20:42 PAGE 4   
+
+ 178   3                  LCD1602_write_data('0' + maxValueTable[0]);
+ 179   3                  LCD1602_write_data('0' + maxValueTable[1]);              
+ 180   3                  if(Blink_Speed < Blink_Speed_Max/2)
+ 181   3                  {
+ 182   4                      LCD1602_write_data('0' + maxValueTable[2]);
+ 183   4                  }
+ 184   3                  else
+ 185   3                  {
+ 186   4                      LCD1602_write_data(' ');
+ 187   4                  }
+ 188   3                  LCD1602_write_data('.');
+ 189   3                  LCD1602_write_data('0' + maxValueTable[3]);
+ 190   3                  LCD1602_write_data('0' + maxValueTable[4]);
+ 191   3                  LCD1602_write_data('0' + maxValueTable[5]);
+ 192   3                  display_tem();
+ 193   3                  break;
+ 194   3              case 4:
+ 195   3                  LCD1602_write_com(0x80+0x40);
+ 196   3                  LCD1602_write_word("M");
+ 197   3                  LCD1602_write_data('0' + maxValueTable[0]);
+ 198   3                  LCD1602_write_data('0' + maxValueTable[1]); 
+ 199   3                  LCD1602_write_data('0' + maxValueTable[2]);
+ 200   3                  LCD1602_write_data('.');
+ 201   3                  if(Blink_Speed < Blink_Speed_Max/2)
+ 202   3                  {
+ 203   4                      LCD1602_write_data('0' + maxValueTable[3]);
+ 204   4                  }
+ 205   3                  else
+ 206   3                  {
+ 207   4                      LCD1602_write_data(' ');
+ 208   4                  }                
+ 209   3                  LCD1602_write_data('0' + maxValueTable[4]);
+ 210   3                  LCD1602_write_data('0' + maxValueTable[5]);
+ 211   3                  display_tem();
+ 212   3                  break;
+ 213   3              case 5:
+ 214   3                  LCD1602_write_com(0x80+0x40);
+ 215   3                  LCD1602_write_word("M");
+ 216   3                  LCD1602_write_data('0' + maxValueTable[0]);
+ 217   3                  LCD1602_write_data('0' + maxValueTable[1]); 
+ 218   3                  LCD1602_write_data('0' + maxValueTable[2]);
+ 219   3                  LCD1602_write_data('.');
+ 220   3                  LCD1602_write_data('0' + maxValueTable[3]);
+ 221   3                  if(Blink_Speed < Blink_Speed_Max/2)
+ 222   3                  {
+ 223   4                      LCD1602_write_data('0' + maxValueTable[4]);
+ 224   4                  }
+ 225   3                  else
+ 226   3                  {
+ 227   4                      LCD1602_write_data(' ');
+ 228   4                  } 
+ 229   3                  LCD1602_write_data('0' + maxValueTable[5]);
+ 230   3                  display_tem();
+ 231   3                  break;
+ 232   3              case 6:
+ 233   3                  LCD1602_write_com(0x80+0x40);
+ 234   3                  LCD1602_write_word("M");
+ 235   3                  LCD1602_write_data('0' + maxValueTable[0]);
+ 236   3                  LCD1602_write_data('0' + maxValueTable[1]); 
+ 237   3                  LCD1602_write_data('0' + maxValueTable[2]);
+ 238   3                  LCD1602_write_data('.');
+ 239   3                  LCD1602_write_data('0' + maxValueTable[3]);
+C51 COMPILER V9.53.0.0   MAIN                                                              05/19/2019 22:20:42 PAGE 5   
+
+ 240   3                  LCD1602_write_data('0' + maxValueTable[4]);
+ 241   3                  if(Blink_Speed < Blink_Speed_Max/2)
+ 242   3                  {
+ 243   4                      LCD1602_write_data('0' + maxValueTable[5]);
+ 244   4                  }
+ 245   3                  else
+ 246   3                  {
+ 247   4                      LCD1602_write_data(' ');
+ 248   4                  }                
+ 249   3                  display_tem();
+ 250   3                  break;
+ 251   3              default:
+ 252   3                  break;
+ 253   3              
+ 254   3          }      
+ 255   2          //超限报警
+ 256   2          if(Weight_Shiwu >= Max_Value || Weight_Shiwu >= AlarmValue)         //超过设置最大值或者传感器本身量程最
+             -大值报警  
+ 257   2          {
+ 258   3            play_record(2);
+ 259   3          }
+ 260   2          else
+ 261   2          {
+ 262   3      //      SendString("Noting~\n");
+ 263   3          }
+ 264   2        }
+ 265   1      }
+ 266          
+ 267          //****************************************************
+ 268          //称重
+ 269          //****************************************************
+ 270          void Get_Weight()
+ 271          {
+ 272   1        Weight_Shiwu = HX711_Read();
+ 273   1        Weight_Shiwu = Weight_Shiwu - Weight_Maopi;   //获取净重
+ 274   1        if(Weight_Shiwu >= 0)     
+ 275   1        { 
+ 276   2          Weight_Shiwu = (unsigned long)((float)Weight_Shiwu/GapValue);   //计算实物的实际重量
+ 277   2        }
+ 278   1        else
+ 279   1        {
+ 280   2          Weight_Shiwu = 0;
+ 281   2        }
+ 282   1        
+ 283   1      }
+ 284          
+ 285          //****************************************************
+ 286          //获取毛皮重量
+ 287          //****************************************************
+ 288          void Get_Maopi()
+ 289          {
+ 290   1        Weight_Maopi = HX711_Read();  
+ 291   1      } 
+ 292          
+ 293          
+ 294          //****************************************************
+ 295          //MS延时函数(12M晶振下测试)
+ 296          //****************************************************
+ 297          void Delay_ms(unsigned int n)
+ 298          {
+ 299   1        unsigned int  i,j;
+ 300   1        for(i=0;i<n;i++)
+C51 COMPILER V9.53.0.0   MAIN                                                              05/19/2019 22:20:42 PAGE 6   
+
+ 301   1          for(j=0;j<123;j++);
+ 302   1      }
+ 303          
+ 304          
+ 305          
+ 306          //****************************************************
+ 307          //按键扫描程序
+ 308          //****************************************************
+ 309          unsigned char Scan_Key()
+ 310          { 
+ 311   1        if( KEY1 == 0 )           //按键扫描
+ 312   1        {
+ 313   2          Delay_ms(10);         //延时去抖
+ 314   2          if( KEY1 == 0 )
+ 315   2          {
+ 316   3            while(KEY1 == 0);     //等待松手
+ 317   3            return 1;
+ 318   3          }
+ 319   2        }
+ 320   1        if( KEY2 == 0 )           //按键扫描
+ 321   1        {
+ 322   2          Delay_ms(10);         //延时去抖
+ 323   2          if( KEY2 == 0 )
+ 324   2          {
+ 325   3            while(KEY2 == 0);     //等待松手
+ 326   3            return 2;
+ 327   3          }
+ 328   2        }
+ 329   1        if( KEY3 == 0 )           //按键扫描
+ 330   1        {
+ 331   2          Delay_ms(10);         //延时去抖
+ 332   2          if( KEY3 == 0 )
+ 333   2          {
+ 334   3            while(KEY3 == 0);     //等待松手
+ 335   3            return 3;
+ 336   3          }
+ 337   2        }
+ 338   1        if( KEY4 == 0 )           //按键扫描
+ 339   1        {
+ 340   2          Delay_ms(10);         //延时去抖
+ 341   2          if( KEY4 == 0 )
+ 342   2          {
+ 343   3            while(KEY4 == 0);     //等待松手
+ 344   3            return 4;
+ 345   3          }
+ 346   2        }
+ 347   1        
+ 348   1        return 0;
+ 349   1      }
+ 350          
+ 351          void play_record(uchar index)
+ 352          {
+ 353   1        switch(index)
+ 354   1        {
+ 355   2          case 1:
+ 356   2            play_01 = 0;
+ 357   2            break;
+ 358   2          case 2:
+ 359   2            play_02 = 0;
+ 360   2            break;
+ 361   2          case 3:
+ 362   2            play_03 = 0;
+C51 COMPILER V9.53.0.0   MAIN                                                              05/19/2019 22:20:42 PAGE 7   
+
+ 363   2            break;
+ 364   2        }
+ 365   1        Delay_ms(1000);
+ 366   1        switch(index)
+ 367   1        {
+ 368   2          case 1:
+ 369   2            play_01 = 1;
+ 370   2            break;
+ 371   2          case 2:
+ 372   2            play_02 = 1;
+ 373   2            break;
+ 374   2          case 3:
+ 375   2            play_03 = 1;
+ 376   2            break;
+ 377   2        }
+ 378   1      }
+ 379          
+ 380          void display_tem()              //显示温度和湿度
+ 381          {
+ 382   1        LCD1602_write_word("R:");
+ 383   1        LCD1602_write_data(RH/10+0x30); 
+ 384   1        LCD1602_write_data(RH%10+0x30);   
+ 385   1        LCD1602_write_word("T:");
+ 386   1        LCD1602_write_data(TH/10+0x30); 
+ 387   1        LCD1602_write_data(TH%10+0x30); 
+ 388   1      }
+ 389          
+ 390          void start()                    // dht11 开始信号
+ 391          { 
+ 392   1        io=1; 
+ 393   1        delay1(); 
+ 394   1        io=0; 
+ 395   1        delay(25);
+ 396   1        io=1;   
+ 397   1        delay1();
+ 398   1        delay1(); 
+ 399   1        delay1(); 
+ 400   1      } 
+ 401          
+ 402           
+ 403          
+ 404          uchar receive_byte()            // 接收一个字节
+ 405          { 
+ 406   1        uchar i,temp; 
+ 407   1        for(i=0;i<8;i++) 
+ 408   1        { 
+ 409   2          while(!io);
+ 410   2          delay1(); 
+ 411   2          delay1(); 
+ 412   2          delay1(); 
+ 413   2          temp=0;
+ 414   2          if(io==1) 
+ 415   2           temp=1;  
+ 416   2          while(io);
+ 417   2          data_byte<<=1;
+ 418   2          data_byte|=temp;            // 接收8bit数据
+ 419   2        } 
+ 420   1      
+ 421   1        return data_byte; 
+ 422   1      } 
+ 423          
+ 424              
+C51 COMPILER V9.53.0.0   MAIN                                                              05/19/2019 22:20:42 PAGE 8   
+
+ 425          
+ 426          void receive()                  // 接收数据
+ 427          { 
+ 428   1        uchar T_H,T_L,R_H,R_L,check,num_check,i; 
+ 429   1        start();
+ 430   1        io=1;   
+ 431   1        if(!io) 
+ 432   1        {  
+ 433   2          while(!io);
+ 434   2          while(io);
+ 435   2          R_H=receive_byte();           // 湿度高位
+ 436   2          R_L=receive_byte();           // 湿度低位
+ 437   2          T_H=receive_byte();           // 温度高位
+ 438   2          T_L=receive_byte();           // 温度低位
+ 439   2          check=receive_byte();         // 校验位
+ 440   2          io=0; 
+ 441   2          for(i=0;i<7;i++)              // 延时50μm
+ 442   2            delay1(); 
+ 443   2          io=1;
+ 444   2          num_check=R_H+R_L+T_H+T_L; 
+ 445   2          if(num_check==check)          // 判断是否与校验位相同
+ 446   2          { 
+ 447   3           RH=R_H; 
+ 448   3           RL=R_L; 
+ 449   3           TH=T_H; 
+ 450   3           TL=T_L; 
+ 451   3           check=num_check; 
+ 452   3          } 
+ 453   2        } 
+ 454   1      } 
+ 455          
+ 456           void delay(uchar ms)             // 延时
+ 457          { 
+ 458   1        uchar i; 
+ 459   1        while(ms--)                        
+ 460   1        for(i=0;i<100;i++); 
+ 461   1      } 
+ 462          
+ 463          void delay1()                   //延时8μm
+ 464          { 
+ 465   1        uchar i; 
+ 466   1        for(i=0;i<1;i++); 
+ 467   1      } 
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2035    ----
+   CONSTANT SIZE    =     53    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     31       8
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
