@@ -1,0 +1,5 @@
+"STARTUP.obj",
+"mabiao.obj",
+"DHT11.obj",
+"LCD1602.obj" 
+TO "mabiao" 

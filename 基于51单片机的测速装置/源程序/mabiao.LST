@@ -1,0 +1,629 @@
+C51 COMPILER V9.53.0.0   MABIAO                                                            05/31/2019 22:33:26 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE MABIAO
+OBJECT MODULE PLACED IN mabiao.OBJ
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE mabiao.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include<reg52.h>   //包含头文件
+   2          
+   3          #define uchar unsigned char
+   4          #define uint unsigned int   //宏定义
+   5          
+   6          #include "Data.h"       //包含大小月判断函数
+   7          #include "DS1302.h"       //包含1302函数
+   8          #include "AT24C02.h"      //包含24c02函数
+   9          #include "LCD1602.h"
+  10          #include "DHT11.h"
+  11          
+  12          extern uchar code tab1[];
+  13          extern uchar code tab2[]; 
+  14          extern uchar code tab3[]; 
+  15          extern uchar code tab4[]; 
+  16          extern uchar code tab5[];
+  17          
+  18          
+  19          sbit COUNT_IN=P3^2;       //霍尔传感器信号输入
+  20          sbit voice = P2^3;
+  21          
+  22          //键盘定义
+  23          sbit K1=P3^4; //设置时间
+  24          sbit K3=P3^6; //减按键
+  25          sbit K2=P3^5; //加按键
+  26          sbit K4=P3^7; //设置半径安全距离
+  27          sbit BEEP=P2^0; //蜂鸣器
+  28          
+  29          uint count;           //霍尔传感器计数变量
+  30          unsigned long Velocity,Mileage;  //速度变量，里程变量
+  31          
+  32                        
+  33          uchar Mode=0;             //设置时间的位置变量，值为1时设置年，值为2时设置月，以此类推...
+  34          uchar bike_set=0;           //设置半径，安全速度时的位置变量
+  35          uchar a;
+  36          char RADIUS,SAFE_SPEED;         //半径和安全速度变量
+  37          bit LED_SEC;              //秒灯闪烁变量
+  38          uchar before_sec;           //上一秒，用与控制秒灯闪烁
+  39          
+  40          void READS();     //读取AT24C02的数据
+  41          void SETS();      //写入24c02数据
+  42          void delay(uint x)    //延时函数，大约延时1ms，不精确
+  43          {
+  44   1        uint i,j;     //定义延时变量
+  45   1        for(i=0;i<x;i++)  //执行x次
+  46   1        for(j=0;j<110;j++); //执行110次
+  47   1      }
+  48          
+  49          void init()       //定时器初始化函数
+  50          {
+  51   1        IT0=1;  //INT0负跳变触发  
+  52   1        TMOD=0x01;//定时器工作于方式1
+  53   1        TH0=0x3c;   //50ms
+  54   1        TL0=0xb0;
+  55   1        EA=1; //CPU开中断总允许
+C51 COMPILER V9.53.0.0   MABIAO                                                            05/31/2019 22:33:26 PAGE 2   
+
+  56   1        ET0=1;//开定时中断
+  57   1        EX0=1;//开外部INTO中断
+  58   1        TR0=1;//启动定时
+  59   1      }
+  60          
+  61          
+  62          void display()
+  63          {
+  64   1        //      1km/h=100m/0.1h      360s
+  65   1        //      10km/h=100m/0.01h    36s
+  66   1        //      100km/h=100m/0.001h  3.6s
+  67   1        if(Mode==0&&bike_set==0)         //不在设置状态时
+  68   1        {
+  69   2          //读时间
+  70   2            Ds1302_Read_Time();        //读取1302内部的时间数据
+  71   2            //显示时间
+  72   2            write_1602com(0x80);           //第一行第一列显示，一下内容依次显示
+  73   2            write_1602dat(0x30+time_buf1[1]/10);   //显示年的十位
+  74   2            write_1602dat(0x30+time_buf1[1]%10);   //显示年的个位
+  75   2            write_1602com(0x80+3);           //第一行第三列（第二列显示“：”），液晶是从第0列开始
+  76   2            write_1602dat(0x30+time_buf1[2]/10);   //显示月的十位
+  77   2            write_1602dat(0x30+time_buf1[2]%10);   //显示月的个位
+  78   2            write_1602com(0x80+6);           //下同
+  79   2            write_1602dat(0x30+time_buf1[3]/10);
+  80   2            write_1602dat(0x30+time_buf1[3]%10);
+  81   2            write_1602com(0x80+9);
+  82   2            write_1602dat(0x30+time_buf1[4]/10);
+  83   2            write_1602dat(0x30+time_buf1[4]%10);
+  84   2            write_1602com(0x80+12);
+  85   2            write_1602dat(0x30+time_buf1[5]/10);
+  86   2            write_1602dat(0x30+time_buf1[5]%10);
+  87   2            write_1602com(0x80+15);         //第一行第十五列，显示星期数据
+  88   2            write_1602dat(time_buf1[7]-1);      //显示星期
+  89   2      
+  90   2            if(before_sec!=time_buf1[6])      //秒灯闪烁
+  91   2            {
+  92   3              before_sec=time_buf1[6];      //读秒的个位
+  93   3              write_1602com(0x80+11);       //选中第一行11列
+  94   3              write_1602dat(':');         //显示：
+  95   3              LED_SEC=1;              //秒灯变量置1，定时器开始计时500ms后熄灭
+  96   3            }
+  97   2            if(LED_SEC==0)              //定时器定时时间到
+  98   2            {
+  99   3              write_1602com(0x80+11);       //第一行第11列
+ 100   3              write_1602dat(' ');         //不显示
+ 101   3            }
+ 102   2      
+ 103   2            write_1602com(0x80+0x40);       //第二行
+ 104   2            if(Mileage/1000000==0)          //里程的最高位是否为0
+ 105   2            write_1602dat(' ');           //为0就不显示
+ 106   2            else                  //不为0
+ 107   2            write_1602dat(0x30+Mileage/1000000);//数字+0x30得到该数字的LCD1602显示码
+ 108   2            if(Mileage%1000000/100000==0)     //同上
+ 109   2            write_1602dat(' ');
+ 110   2            else  
+ 111   2            write_1602dat(0x30+Mileage%1000000/100000);//数字+0x30得到该数字的LCD1602显示码
+ 112   2            write_1602dat(0x30+Mileage%1000000%100000/10000);//数字+0x30得到该数字的LCD1602显示码 
+ 113   2            write_1602com(0x80+0x40+4);        //第二行第4列
+ 114   2            write_1602dat(0x30+Mileage%1000000%100000%10000/1000);//数字+30得到该数字的LCD1602显示码
+ 115   2            write_1602dat(0x30+Mileage%1000000%100000%10000%1000/100);//数字+30得到该数字的LCD1602显示码
+ 116   2            write_1602dat(0x30+Mileage%1000000%100000%10000%1000%100/10);//数字+30得到该数字的LCD1602显示码
+ 117   2            SETS();             //每次刷新里程数据后都保存一次里程数据，掉电存储
+C51 COMPILER V9.53.0.0   MABIAO                                                            05/31/2019 22:33:26 PAGE 3   
+
+ 118   2        
+ 119   2            write_1602com(0x80+0x40+9);             //第二行第9列
+ 120   2            if(Velocity/100==0)
+ 121   2            write_1602dat(' ');
+ 122   2            else
+ 123   2            write_1602dat(0x30+Velocity/100);
+ 124   2            if(Velocity/10==0)
+ 125   2            write_1602dat(' ');
+ 126   2            else
+ 127   2            write_1602dat(0x30+Velocity%100/10);            //显示速度数据
+ 128   2            write_1602dat(0x30+Velocity%100%10);//数字+30得到该数字的LCD1602显示码
+ 129   2        }
+ 130   1        else if(Mode!=0)       //在设置万年历时钟模式时
+ 131   1        {
+ 132   2          switch(Mode)       //判断Mode数据
+ 133   2          {
+ 134   3            case 1:                          //值为1时
+ 135   3              write_1602com(0x80+0x40);//显示固定符号写入位置    //第二行
+ 136   3              for(a=0;a<16;a++)
+ 137   3              {
+ 138   4                write_1602dat(tab5[a]);//写显示固定符号
+ 139   4              }
+ 140   3              write_1602com(0x80+0x40+14);        //第二行第14列
+ 141   3              write_1602dat(0x30+time_buf1[6]/10);    //显示秒
+ 142   3              write_1602dat(0x30+time_buf1[6]%10);  
+ 143   3              write_1602com(0x0F);   //打开闪烁
+ 144   3              write_1602com(0x80+1);   //第一行第一列闪烁，年的位置闪烁
+ 145   3              break;              
+ 146   3            case 2:
+ 147   3              write_1602com(0x80+4);   //月的位置闪烁
+ 148   3              break;
+ 149   3            case 3:
+ 150   3              write_1602com(0x80+7);   //日的位置闪烁
+ 151   3              break;
+ 152   3            case 4:
+ 153   3              write_1602com(0x80+10);  //小时的位置闪烁
+ 154   3              break;
+ 155   3            case 5:
+ 156   3              write_1602com(0x80+13);  //分钟的位置闪烁
+ 157   3              break;
+ 158   3            case 6:
+ 159   3              write_1602com(0x80+0x40+15); //秒的位置闪烁
+ 160   3              break;
+ 161   3            case 7:
+ 162   3              write_1602com(0x80+15);    //星期的位置闪烁
+ 163   3              break;
+ 164   3            case 8:
+ 165   3              write_1602com(0x0c); //设置完后关闭闪烁
+ 166   3              write_1602com(0x80);//显示固定符号从第一行第1个位置之后开始显示
+ 167   3              for(a=0;a<16;a++)
+ 168   3              {
+ 169   4                write_1602dat(tab1[a]);//向液晶屏写固定符号部分
+ 170   4              }
+ 171   3              write_1602com(0x80+0x40);//显示固定符号写入位置，从第2个位置后开始显示
+ 172   3              for(a=0;a<16;a++)
+ 173   3              {
+ 174   4                write_1602dat(tab2[a]);//写显示固定符号
+ 175   4              }
+ 176   3              break;
+ 177   3          }
+ 178   2        }
+ 179   1        else if(bike_set!=0)           //设置半径和安全速度
+C51 COMPILER V9.53.0.0   MABIAO                                                            05/31/2019 22:33:26 PAGE 4   
+
+ 180   1        {
+ 181   2          switch(bike_set)                 //判断bike_set
+ 182   2          {
+ 183   3            case 1: 
+ 184   3              write_1602com(0x80);//显示固定符号写入位置
+ 185   3              for(a=0;a<16;a++)
+ 186   3              {
+ 187   4                write_1602dat(tab3[a]);//写显示固定符号
+ 188   4              }
+ 189   3              write_1602com(0x80+0x40);//显示固定符号写入位置
+ 190   3              for(a=0;a<16;a++)
+ 191   3              {
+ 192   4                write_1602dat(tab4[a]);//写显示固定符号
+ 193   4              }
+ 194   3              write_1602com(0x80+12);
+ 195   3              write_1602dat(0x30+RADIUS/10);       //车轮半径
+ 196   3              write_1602dat(0x30+RADIUS%10);
+ 197   3              write_1602com(0x80+0x40+10);
+ 198   3              write_1602dat(0x30+SAFE_SPEED/10);       //安全速度
+ 199   3              write_1602dat(0x30+SAFE_SPEED%10);  
+ 200   3              write_1602com(0x0F);   //打开闪烁
+ 201   3              write_1602com(0x80+13);
+ 202   3              break;              
+ 203   3            case 2:
+ 204   3              write_1602com(0x80+0x40+11);
+ 205   3              break;
+ 206   3            case 3:
+ 207   3              write_1602com(0x0c);
+ 208   3              write_1602com(0x80);//显示固定符号从第一行第1个位置之后开始显示
+ 209   3              for(a=0;a<16;a++)
+ 210   3              {
+ 211   4                write_1602dat(tab1[a]);//向液晶屏写固定符号部分
+ 212   4              }
+ 213   3              write_1602com(0x80+0x40);//显示固定符号写入位置，从第2个位置后开始显示
+ 214   3              for(a=0;a<16;a++)
+ 215   3              {
+ 216   4                write_1602dat(tab2[a]);//写显示固定符号
+ 217   4              }
+ 218   3              break;
+ 219   3          }
+ 220   2        } 
+ 221   1      }
+ 222          
+ 223          void KEY()          //按键函数
+ 224          { 
+ 225   1        if(bike_set==0&&K1==0)  //不是设置半径模式时，可以按下K1
+ 226   1        {
+ 227   2          delay(20);      //延时去抖
+ 228   2          if(bike_set==0&&K1==0)//再次判断按键是否按下
+ 229   2          {
+ 230   3            BEEP=0;       //蜂鸣器响
+ 231   3            delay(50);      //延时
+ 232   3            BEEP=1;       //关闭蜂鸣器，达到按键音的作用，下同，注释略
+ 233   3            Mode++;       //Mode++；
+ 234   3            display();      //显示函数
+ 235   3            if(Mode>=8)     //设置完成
+ 236   3            {
+ 237   4              Mode=0;        //变量清零
+ 238   4              Ds1302_Write_Time();//时间日期数据写入时钟芯片
+ 239   4            }
+ 240   3          }
+ 241   2          while(bike_set==0&&K1==0); //按键释放，只要按键没有松开，此处一直成立，不会跳出
+C51 COMPILER V9.53.0.0   MABIAO                                                            05/31/2019 22:33:26 PAGE 5   
+
+ 242   2        }
+ 243   1        if(K4==0&&Mode==0)         //不是设置时间数据时才可以按下K4
+ 244   1        {
+ 245   2          delay(20);           //延时去抖，下同
+ 246   2          if(K4==0&&Mode==0)       //再次判断按键是否按下
+ 247   2          {
+ 248   3            BEEP=0;
+ 249   3            delay(50);
+ 250   3            BEEP=1;          //按键音
+ 251   3            bike_set++;        //变量加
+ 252   3            display();         //调用显示函数
+ 253   3            if(bike_set>=3)      //设置完成
+ 254   3            {
+ 255   4              bike_set=0;      //变量清零
+ 256   4              SETS();        //将设置好的数据保存到AT24C02中，掉电保存
+ 257   4            }
+ 258   3          }
+ 259   2          while(Mode==0&&K4==0);     //按键释放
+ 260   2        }
+ 261   1      
+ 262   1        //+
+ 263   1        if(K2==0&&(Mode!=0||bike_set!=0))  //在设置状态时，按下K2
+ 264   1        {
+ 265   2          delay(20);
+ 266   2          //调时
+ 267   2          if(K2==0&&(Mode!=0||bike_set!=0))
+ 268   2          {
+ 269   3            BEEP=0;
+ 270   3            delay(50);
+ 271   3            BEEP=1; 
+ 272   3            switch(Mode)                //设置时钟时
+ 273   3            {
+ 274   4              case 1:                 //设置年时
+ 275   4                time_buf1[1]++;           //年加
+ 276   4                if(time_buf1[1]>=100)       //年最大加到99，到100后清零
+ 277   4                  time_buf1[1]=0;
+ 278   4                write_1602com(0x80);
+ 279   4                write_1602dat(0x30+time_buf1[1]/10);//显示年数据
+ 280   4                write_1602dat(0x30+time_buf1[1]%10);
+ 281   4                write_1602com(0x80+1);        //返回到年的位置闪烁
+ 282   4                break;                //跳出
+ 283   4              case 2:                 //设置月份
+ 284   4                time_buf1[2]++;           //月份数据加
+ 285   4                if(time_buf1[2]>=13)        //最大是12
+ 286   4                  time_buf1[2]=1;         //下同，注释略
+ 287   4                write_1602com(0x80+3);
+ 288   4                write_1602dat(0x30+time_buf1[2]/10);
+ 289   4                write_1602dat(0x30+time_buf1[2]%10);
+ 290   4                write_1602com(0x80+4);
+ 291   4                break;
+ 292   4              case 3:
+ 293   4                time_buf1[3]++;                  //日数据
+ 294   4                if(time_buf1[3]>=YDay(time_buf1[1],time_buf1[2])+1)
+ 295   4                  time_buf1[3]=1;
+ 296   4                write_1602com(0x80+6);
+ 297   4                write_1602dat(0x30+time_buf1[3]/10);
+ 298   4                write_1602dat(0x30+time_buf1[3]%10);
+ 299   4                write_1602com(0x80+7);
+ 300   4                break;
+ 301   4              case 4:
+ 302   4                time_buf1[4]++;               //时
+ 303   4                if(time_buf1[4]>=24)
+C51 COMPILER V9.53.0.0   MABIAO                                                            05/31/2019 22:33:26 PAGE 6   
+
+ 304   4                  time_buf1[4]=0;
+ 305   4                write_1602com(0x80+9);
+ 306   4                write_1602dat(0x30+time_buf1[4]/10);
+ 307   4                write_1602dat(0x30+time_buf1[4]%10);
+ 308   4                write_1602com(0x80+10);
+ 309   4                break;
+ 310   4              case 5:
+ 311   4                time_buf1[5]++;                //分
+ 312   4                if(time_buf1[5]>=60)
+ 313   4                  time_buf1[5]=0;
+ 314   4                write_1602com(0x80+12);
+ 315   4                write_1602dat(0x30+time_buf1[5]/10);
+ 316   4                write_1602dat(0x30+time_buf1[5]%10);
+ 317   4                write_1602com(0x80+13);
+ 318   4                break;
+ 319   4              case 6:
+ 320   4                time_buf1[6]++;
+ 321   4                if(time_buf1[6]>=60)           //秒
+ 322   4                  time_buf1[6]=0;
+ 323   4                write_1602com(0x80+0x40+14);
+ 324   4                write_1602dat(0x30+time_buf1[6]/10);
+ 325   4                write_1602dat(0x30+time_buf1[6]%10);
+ 326   4                write_1602com(0x80+0x40+15);
+ 327   4                break;
+ 328   4              case 7:
+ 329   4                time_buf1[7]++;
+ 330   4                if(time_buf1[7]>=8)             //星期
+ 331   4                  time_buf1[7]=1;
+ 332   4                write_1602com(0x80+15);
+ 333   4                write_1602dat(time_buf1[7]-1);
+ 334   4                write_1602com(0x80+15);
+ 335   4                break;
+ 336   4            }
+ 337   3            switch(bike_set)               //设置半径安全速度
+ 338   3            {
+ 339   4              case 1:
+ 340   4                RADIUS++;              //半径数据
+ 341   4                if(RADIUS>=71)
+ 342   4                RADIUS=0;
+ 343   4                write_1602com(0x80+12);
+ 344   4                write_1602dat(0x30+RADIUS/10);
+ 345   4                write_1602dat(0x30+RADIUS%10);
+ 346   4                write_1602com(0x80+13);
+ 347   4                break;
+ 348   4              case 2:
+ 349   4                SAFE_SPEED++;
+ 350   4                if(SAFE_SPEED>=100)            //安全速度
+ 351   4                SAFE_SPEED=0;
+ 352   4                write_1602com(0x80+0x40+10);
+ 353   4                write_1602dat(0x30+SAFE_SPEED/10);
+ 354   4                write_1602dat(0x30+SAFE_SPEED%10);
+ 355   4                write_1602com(0x80+0x40+11);
+ 356   4                break;
+ 357   4            }
+ 358   3          }
+ 359   2          while(K2==0);               //按键释放
+ 360   2        }
+ 361   1      
+ 362   1        //-
+ 363   1        if(K3==0&&(Mode!=0||bike_set!=0))      //以下为K3，减按键，注释参考加按键，略
+ 364   1        {
+ 365   2          delay(20);
+C51 COMPILER V9.53.0.0   MABIAO                                                            05/31/2019 22:33:26 PAGE 7   
+
+ 366   2          //调时
+ 367   2          if(K3==0&&(Mode!=0||bike_set!=0))
+ 368   2          {
+ 369   3            BEEP=0;
+ 370   3            delay(50);
+ 371   3            BEEP=1;
+ 372   3            switch(Mode)
+ 373   3            {
+ 374   4              case 1:
+ 375   4                time_buf1[1]--;
+ 376   4                if(time_buf1[1]<0)
+ 377   4                  time_buf1[1]=99;
+ 378   4                write_1602com(0x80);
+ 379   4                write_1602dat(0x30+time_buf1[1]/10);
+ 380   4                write_1602dat(0x30+time_buf1[1]%10);
+ 381   4                write_1602com(0x80+1);
+ 382   4                break;
+ 383   4              case 2:
+ 384   4                time_buf1[2]--;
+ 385   4                if(time_buf1[2]<=0)
+ 386   4                  time_buf1[2]=12;
+ 387   4                write_1602com(0x80+3);
+ 388   4                write_1602dat(0x30+time_buf1[2]/10);
+ 389   4                write_1602dat(0x30+time_buf1[2]%10);
+ 390   4                write_1602com(0x80+4);
+ 391   4                break;
+ 392   4              case 3:
+ 393   4                time_buf1[3]--;
+ 394   4                if(time_buf1[3]<=0)
+ 395   4                  time_buf1[3]=YDay(time_buf1[1],time_buf1[2]);
+ 396   4                write_1602com(0x80+6);
+ 397   4                write_1602dat(0x30+time_buf1[3]/10);
+ 398   4                write_1602dat(0x30+time_buf1[3]%10);
+ 399   4                write_1602com(0x80+7);
+ 400   4                break;
+ 401   4              case 4:
+ 402   4                time_buf1[4]--;
+ 403   4                if(time_buf1[4]<0)
+ 404   4                  time_buf1[4]=23;
+ 405   4                write_1602com(0x80+9);
+ 406   4                write_1602dat(0x30+time_buf1[4]/10);
+ 407   4                write_1602dat(0x30+time_buf1[4]%10);
+ 408   4                write_1602com(0x80+10);
+ 409   4                break;
+ 410   4              case 5:
+ 411   4                time_buf1[5]--;
+ 412   4                if(time_buf1[5]<0)
+ 413   4                  time_buf1[5]=59;
+ 414   4                write_1602com(0x80+12);
+ 415   4                write_1602dat(0x30+time_buf1[5]/10);
+ 416   4                write_1602dat(0x30+time_buf1[5]%10);
+ 417   4                write_1602com(0x80+13);
+ 418   4                break;
+ 419   4              case 6:
+ 420   4                time_buf1[6]--;
+ 421   4                if(time_buf1[6]<0)
+ 422   4                  time_buf1[6]=59;
+ 423   4                write_1602com(0x80+0x40+14);
+ 424   4                write_1602dat(0x30+time_buf1[6]/10);
+ 425   4                write_1602dat(0x30+time_buf1[6]%10);
+ 426   4                write_1602com(0x80+0x40+15);
+ 427   4                break;
+C51 COMPILER V9.53.0.0   MABIAO                                                            05/31/2019 22:33:26 PAGE 8   
+
+ 428   4              case 7:
+ 429   4                time_buf1[7]--;
+ 430   4                if(time_buf1[7]<1)
+ 431   4                  time_buf1[7]=7;
+ 432   4                write_1602com(0x80+15);
+ 433   4                write_1602dat(time_buf1[7]-1);
+ 434   4                write_1602com(0x80+15);
+ 435   4                break;
+ 436   4            }
+ 437   3            switch(bike_set)
+ 438   3            {
+ 439   4              case 1:
+ 440   4                RADIUS--;
+ 441   4                if(RADIUS<0)
+ 442   4                RADIUS=70;
+ 443   4                write_1602com(0x80+12);
+ 444   4                write_1602dat(0x30+RADIUS/10);
+ 445   4                write_1602dat(0x30+RADIUS%10);
+ 446   4                write_1602com(0x80+13);
+ 447   4                break;
+ 448   4              case 2:
+ 449   4                SAFE_SPEED--;
+ 450   4                if(SAFE_SPEED<0)
+ 451   4                SAFE_SPEED=99;
+ 452   4                write_1602com(0x80+0x40+10);
+ 453   4                write_1602dat(0x30+SAFE_SPEED/10);
+ 454   4                write_1602dat(0x30+SAFE_SPEED%10);
+ 455   4                write_1602com(0x80+0x40+11);
+ 456   4                break;
+ 457   4            }
+ 458   3          }
+ 459   2          while(K3==0);
+ 460   2        } 
+ 461   1        if(K2==0&&K3==0&&Mode==0&bike_set==0)   //不是在设置状态时，两个按键同时按下
+ 462   1        {
+ 463   2          BEEP=0;
+ 464   2          delay(100);
+ 465   2          BEEP=1;
+ 466   2          delay(100);
+ 467   2          BEEP=0;
+ 468   2          delay(100);
+ 469   2          BEEP=1;              //蜂鸣器快响两声
+ 470   2          delay(100);
+ 471   2          Mileage=0;            //里程数据清零
+ 472   2          SETS();             //将清零的数据写入24c02
+ 473   2          while(K2==0&&K3==0);      //按键释放
+ 474   2        }
+ 475   1        if(K2 == 0 && bike_set == 0 && Mode == 0){
+ 476   2          ShowTemAndHum();
+ 477   2          while(K2 == 0 && bike_set == 0 && Mode == 0);
+ 478   2          write_1602com(0x80);//显示固定符号从第一行第1个位置之后开始显示
+ 479   2          write_1602string(tab1);
+ 480   2          write_1602com(0x80+0x40);//显示固定符号写入位置，从第2个位置后开始显示
+ 481   2          write_1602string(tab2);
+ 482   2        }
+ 483   1      }
+ 484          void BJ_SAFE()               //安全速度报警函数
+ 485          {
+ 486   1        if(Velocity>SAFE_SPEED)        //当前速度超过安全速度
+ 487   1        {
+ 488   2          BEEP=0;             //蜂鸣器响
+ 489   2          voice = 0;
+C51 COMPILER V9.53.0.0   MABIAO                                                            05/31/2019 22:33:26 PAGE 9   
+
+ 490   2        }
+ 491   1        else                //没超过
+ 492   1        {
+ 493   2          BEEP=1;            //关闭蜂鸣器
+ 494   2          voice = 1;
+ 495   2        }
+ 496   1      }
+ 497          
+ 498          void main()              //主函数
+ 499          {
+ 500   1        //初始化
+ 501   1        Ds1302_Init();       //时钟芯片初始化
+ 502   1        lcd_init();        //液晶初始化
+ 503   1        initeeprom();      //24c02初始化
+ 504   1        READS();          //读取初始参数
+ 505   1        init();           //定时器初始化
+ 506   1        before_sec=time_buf1[6];  //读取到秒数据
+ 507   1        while(1)          //进入循环
+ 508   1        {
+ 509   2          if(Mode==0&&bike_set==0)//不是设置状态时
+ 510   2          {
+ 511   3            display();       //调用显示函数
+ 512   3            BJ_SAFE();      //判断是否超速
+ 513   3          }
+ 514   2          KEY();           //扫描按键
+ 515   2        }
+ 516   1      }
+ 517          
+ 518          void EXINT0() interrupt 0    //外部中断0
+ 519          {
+ 520   1        count++;           //霍尔有信号，该变量加1
+ 521   1      }
+ 522          
+ 523          void time0() interrupt 1    //定时器中断0
+ 524          {
+ 525   1        uchar m,n;
+ 526   1        TH0=0x3c;
+ 527   1        TL0=0xb0;  //50ms
+ 528   1        m++;
+ 529   1        if(LED_SEC==1)        //秒灯控制
+ 530   1        {
+ 531   2          n++;
+ 532   2          if(n>=10)       //到500ms时
+ 533   2          {
+ 534   3            n=0;
+ 535   3            LED_SEC=0;      //熄灭秒灯
+ 536   3          }
+ 537   2        }
+ 538   1        
+ 539   1        if(m>=10)          //500ms时计算一次里程速度信息
+ 540   1        {
+ 541   2          m=0;
+ 542   2          Mileage=Mileage+10*(Velocity/3.6)/2;     //里程m=里程+速度km/h/3.6/2
+ 543   2          Velocity=count *2*3.14*RADIUS /100000*2*3600  /40;//将500ms的距离经过运算得到km/h，将速度/100，方便显示
+ 544   2          count=0;                    //清零
+ 545   2        }
+ 546   1      }
+ 547          
+ 548          
+ 549          //读初值
+ 550          void READS()
+ 551          {
+C51 COMPILER V9.53.0.0   MABIAO                                                            05/31/2019 22:33:26 PAGE 10  
+
+ 552   1        uchar Mileage_H,Mileage_M,Mileage_L;   //定义将里程拆开得到的三个数据
+ 553   1        delay(10);
+ 554   1        RADIUS=read_add(0x01);           //读取半径信息
+ 555   1        delay(10);                 //延时的作用是读写数据更稳定
+ 556   1        SAFE_SPEED=read_add(0x02);         //读取安全速度信息
+ 557   1      
+ 558   1        delay(10);
+ 559   1        Mileage_H=read_add(0x03);        //读取里程数据的高位
+ 560   1        delay(10);
+ 561   1        Mileage_M=read_add(0x04);        //读取里程数据的中间位
+ 562   1        delay(10);
+ 563   1        Mileage_L=read_add(0x05);        //读取里程数据的低位
+ 564   1      
+ 565   1        Mileage=Mileage_H*100000+Mileage_M*1000+Mileage_L*10;//将三个数据组合成里程数据
+ 566   1      }
+ 567          
+ 568          
+ 569          //写初值
+ 570          void SETS()
+ 571          {
+ 572   1        delay(10);
+ 573   1        write_add(0x01,RADIUS);       //将半径数据写入24c02
+ 574   1        delay(10);
+ 575   1        write_add(0x02,SAFE_SPEED);     //将安全速度信息写入
+ 576   1      
+ 577   1      /*  Mileage_H=Mileage/10000;       //123.4560
+ 578   1        Mileage_M=Mileage%10000/100;
+ 579   1        Mileage_L=Mileage%10000%100; */
+ 580   1        delay(10);
+ 581   1        write_add(0x03,Mileage/100000);      //里程数据写入
+ 582   1        delay(10);
+ 583   1        write_add(0x04,Mileage%100000/1000);
+ 584   1        delay(10);
+ 585   1        write_add(0x05,Mileage%100000%1000/10);
+ 586   1      }
+ 587          
+ 588          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   4143    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     32       5
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
