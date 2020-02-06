@@ -1,0 +1,94 @@
+C51 COMPILER V9.53.0.0   MAIN                                                              05/13/2019 16:48:40 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN main.OBJ
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c COMPACT OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          /**************************************************************
+   2          
+   3          KEY1 ： 发送TEXT模式的短信     
+   4          
+   5          本例程使用11.0592MHZ时钟---->必须为11.0592M
+   6          
+   7          串口设置为：9600,8,n,1.
+   8          
+   9          ******************************************/
+  10          #include "GSM.h"
+  11          #include "LCD1602.h"
+  12          #include "BUZZ.h"
+  13          #include "beam.h"
+  14          #include "TemAndHum.h"
+  15          #include "Gas.h"
+  16          
+  17          int sendFlag = 0;
+  18          
+  19          /**********************************************/
+  20          /*设计思路：
+  21          (0)进行串口、定时器初始化工作。
+  22          (1)开机等待10秒，等待模块准备好。
+  23          (2)发送相应的指令。
+  24          ************************************************/
+  25          void main(void)
+  26          {
+  27   1        u8 i;
+  28   1        int ret;
+  29   1        Int0Init();     // 初始化外部中断0
+  30   1        Int1Init();     // 初始化外部中断1
+  31   1        Init_BH1750();
+  32   1        Init_LCD1602();
+  33   1        Uart1Init();    // 串口初始化
+  34   1        Timer0Init();   // TIM0初始化
+  35   1        
+  36   1        for(i = 0;i < STABLE_TIMES;i++){        //等待网络稳定
+  37   2          delay_ms(50);
+  38   2        }
+  39   1        LCD1602_write_com(0x80);
+  40   1        LCD1602_write_word("Welcome to use! ");
+  41   1        delay_ms(50);
+  42   1        while(1){
+  43   2          Show_Beam();                        // 显示光照度
+  44   2          ShowTemAndHum();                    // 显示温湿度
+  45   2          delay_ms(10); 
+  46   2          if(sendFlag == 1){
+  47   3            LCD1602_write_com(0x80);
+  48   3            LCD1602_write_word("Sending message!");
+  49   3            LCD1602_write_com(0x80 + 0x40);
+  50   3            LCD1602_write_word("                ");
+  51   3            ret = send_text_message("Attention the fire!");// 发送TEXT短信
+  52   3            if(ret == 1){
+  53   4              LCD1602_write_com(0x80);
+  54   4              LCD1602_write_word("Send Successful!");
+  55   4              LCD1602_write_com(0x80 + 0x40);
+C51 COMPILER V9.53.0.0   MAIN                                                              05/13/2019 16:48:40 PAGE 2   
+
+  56   4              LCD1602_write_word("                ");
+  57   4              delay_ms(50);
+  58   4            }
+  59   3            else{
+  60   4              LCD1602_write_com(0x80 + 0x40);
+  61   4              LCD1602_write_word("      Fail      ");
+  62   4            } 
+  63   3            sendFlag = 0;
+  64   3          }
+  65   2        }
+  66   1      }
+  67          
+  68          
+  69          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    187    ----
+   CONSTANT SIZE    =    105    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =      2       1
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

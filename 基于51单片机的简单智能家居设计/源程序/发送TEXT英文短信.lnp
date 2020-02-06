@@ -1,0 +1,9 @@
+"main.obj",
+"LCD1602.obj",
+"GSM.obj",
+"BUZZ.obj",
+"beam.obj",
+"TemAndHum.obj",
+"Gas.obj" 
+TO "·¢ËÍTEXTÓ¢ÎÄ¶ÌÐÅ" 
+RAMSIZE(256) 

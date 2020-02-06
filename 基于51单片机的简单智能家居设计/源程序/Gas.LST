@@ -1,0 +1,63 @@
+C51 COMPILER V9.53.0.0   GAS                                                               05/10/2019 17:01:27 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE GAS
+OBJECT MODULE PLACED IN Gas.OBJ
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE Gas.c COMPACT OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include "Gas.h"
+   2          #include "BUZZ.h"
+   3          #include "LCD1602.h"
+   4          
+   5          void Gas_Delay(uint i)
+   6          {
+   7   1        while(i--);
+   8   1      }
+   9          
+  10          void Int0Init()
+  11          {
+  12   1        IT0 = 1;
+  13   1        EX0 = 1;
+  14   1        EA = 1;
+  15   1      }
+  16          
+  17          void Int1Init()
+  18          {
+  19   1        IT1 = 1;
+  20   1        EX1 = 1;
+  21   1        EA = 1;
+  22   1      }
+  23          
+  24          void Int0() interrupt 0
+  25          {
+  26   1        Gas_Delay(1000);
+  27   1        if(DOUT0 == 0){
+  28   2          Ring();                         // ·äÃùÆ÷Ïì
+  29   2          sendFlag = 1;
+  30   2        } 
+  31   1      }
+  32          
+  33          void Init1() interrupt 2
+  34          {
+  35   1        Gas_Delay(1000);
+  36   1        if(DOUT1 == 0){
+  37   2          Ring();
+  38   2          sendFlag = 1;
+  39   2        }
+  40   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    177    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

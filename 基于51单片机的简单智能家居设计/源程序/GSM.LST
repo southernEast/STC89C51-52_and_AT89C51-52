@@ -1,0 +1,349 @@
+C51 COMPILER V9.53.0.0   GSM                                                               05/14/2019 16:53:04 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE GSM
+OBJECT MODULE PLACED IN GSM.OBJ
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE GSM.c COMPACT OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include "GSM.h"
+   2          
+   3          xdata u8 Uart1_Buf[Buf_Max];
+   4          u8 First_Int = 0;
+   5          u16 count_20ms;
+   6          u8  *phone_num = "AT+CMGS=\"13394308020\""; //拨打电话，修改这里可以修改拨打的电话。
+   7          
+   8          void Timer0Init(void)   //20毫秒@115200
+   9          {
+  10   1        TMOD &= 0xF0;   
+  11   1        TMOD |= 0x01;   //
+  12   1        TL0 = (65536-20000)%256;    //
+  13   1        TH0 = (65536-20000)/256;    //
+  14   1        TF0 = 0;    //
+  15   1        ET0 = 1;        //
+  16   1        TR0 = 1;    //开始计时
+  17   1      }
+  18          
+  19          void Uart1Init(void)    //9600bps@11.05926MHz
+  20          {
+  21   1        PCON &= 0x7F;   //
+  22   1        SCON = 0x50;    //
+  23   1        TMOD &= 0x0F;   //
+  24   1        TMOD |= 0x20;   //
+  25   1        TL1 = 0xFD;     //
+  26   1        TH1 = 0xFD;     //
+  27   1        ET1 = 0;        //
+  28   1        TR1 = 1;        //
+  29   1        ES  = 1;          //
+  30   1      }
+  31          
+  32          int check_status(void)
+  33          {
+  34   1        int ret;
+  35   1        
+  36   1        ret = UART1_Send_AT_Command("AT","OK",3,50);//测试通信是否成功
+  37   1        if(ret == 0)
+  38   1        {
+  39   2          return COMMUNITE_ERROR;
+  40   2        }
+  41   1        
+  42   1        ret = UART1_Send_AT_Command("AT+CPIN?","READY",2,50);//查询卡是否插上
+  43   1        if(ret == 0)
+  44   1        {
+  45   2          return NO_SIM_CARD_ERROR;
+  46   2        }
+  47   1        
+  48   1        ret = Wait_CREG(3);//查询卡是否注册到网络
+  49   1        if(ret == 0)
+  50   1        {
+  51   2          return SIM_CARD_NO_REG_ERROR;
+  52   2        }
+  53   1        return 1;
+  54   1      }
+  55          
+C51 COMPILER V9.53.0.0   GSM                                                               05/14/2019 16:53:04 PAGE 2   
+
+  56          /***************************************************************
+  57          注：当然你可以返回其他值，来确定到底是哪一步发送指令出现失败了。
+  58          ****************************************************************/
+  59          int send_text_message(char *content)
+  60          {
+  61   1        u8 ret;
+  62   1        char end_char[2];
+  63   1        
+  64   1        end_char[0] = 0x1A;//结束字符
+  65   1        end_char[1] = '\0';
+  66   1        
+  67   1        //设置存储位置
+  68   1      
+  69   1        UART1_Send_Command("AT+CSCS=\"GSM\"");
+  70   1        delay_ms(50);
+  71   1        UART1_Send_Command("AT+CMGF=1");
+  72   1        delay_ms(80);
+  73   1        UART1_Send_Command(phone_num);
+  74   1        delay_ms(80);
+  75   1        UART1_SendString(content); 
+  76   1        UART1_Send_Command(end_char);
+  77   1      //  UART1_Send_Command("ATD15543777824;");
+  78   1        
+  79   1        return 1;
+  80   1      }
+*** WARNING C280 IN LINE 61 OF GSM.c: 'ret': unreferenced local variable
+  81          
+  82          /*******************************************************************************
+  83          * 函数名 : CLR_Buf
+  84          * 描述   : 清除串口2缓存数据
+  85          * 输入   : 
+  86          * 输出   : 
+  87          * 返回   : 
+  88          * 注意   : 
+  89          *******************************************************************************/
+  90          void CLR_Buf(void)
+  91          {
+  92   1        u8 k;
+  93   1        for(k=0;k<Buf_Max;k++)      //将缓存内容清零
+  94   1        {
+  95   2          Uart1_Buf[k] = 0x00;
+  96   2        }
+  97   1          First_Int = 0;              //接收字符串的起始存储位置
+  98   1      }
+  99          
+ 100          
+ 101          /*******************************************************************************
+ 102          * 函数名 : Find
+ 103          * 描述   : 判断缓存中是否含有指定的字符串
+ 104          * 输入   : 
+ 105          * 输出   : 
+ 106          * 返回   : unsigned char:1 找到指定字符，0 未找到指定字符 
+ 107          * 注意   : 
+ 108          *******************************************************************************/
+ 109          
+ 110          u8 Find(u8 *a)
+ 111          { 
+ 112   1        ES = 0;  //改进程序
+ 113   1        if(strstr(Uart1_Buf,a)!=NULL)
+ 114   1        {
+ 115   2          ES = 1;
+ 116   2          return 1;
+C51 COMPILER V9.53.0.0   GSM                                                               05/14/2019 16:53:04 PAGE 3   
+
+ 117   2        } 
+ 118   1        else
+ 119   1        {
+ 120   2          ES = 1;
+ 121   2          return 0;
+ 122   2        }
+ 123   1          
+ 124   1      }
+ 125          
+ 126          
+ 127          
+ 128          /*******************************************************************************
+ 129          * 函数名 : Wait_CREG
+ 130          * 描述   : 等待模块注册成功
+ 131          * 输入   : 
+ 132          * 输出   : 
+ 133          * 返回   : 
+ 134          * 注意   : 
+ 135          *******************************************************************************/
+ 136          u8 Wait_CREG(u8 query_times)
+ 137          {
+ 138   1        u8 i;
+ 139   1        u8 k;
+ 140   1        u8 j;
+ 141   1        i = 0;
+ 142   1        CLR_Buf();
+ 143   1        while(i == 0)             
+ 144   1        {
+ 145   2      
+ 146   2          UART1_Send_Command("AT+CREG?");
+ 147   2          delay_ms(100); 
+ 148   2          
+ 149   2          for(k=0;k<Buf_Max;k++)            
+ 150   2          {
+ 151   3            if((Uart1_Buf[k] == '+')&&(Uart1_Buf[k+1] == 'C')&&(Uart1_Buf[k+2] == 'R')&&(Uart1_Buf[k+3] == 'E')&&(U
+             -art1_Buf[k+4] == 'G')&&(Uart1_Buf[k+5] == ':'))
+ 152   3            {
+ 153   4                 
+ 154   4              if((Uart1_Buf[k+7] == '1')&&((Uart1_Buf[k+9] == '1')||(Uart1_Buf[k+9] == '5')))
+ 155   4              {
+ 156   5                i = 1;
+ 157   5                return 1;
+ 158   5              }
+ 159   4              
+ 160   4            }
+ 161   3          }
+ 162   2          j++;
+ 163   2          if(j > query_times)
+ 164   2          {
+ 165   3            return 0;
+ 166   3          }
+ 167   2          
+ 168   2        }
+ 169   1        return 0;
+ 170   1      }
+ 171          
+ 172          
+ 173          
+ 174          /*----------------------------
+ 175          UART1 发送串口数据
+ 176          -----------------------------*/
+ 177          void UART1_SendData(u8 dat)
+C51 COMPILER V9.53.0.0   GSM                                                               05/14/2019 16:53:04 PAGE 4   
+
+ 178          {
+ 179   1        ES=0;     //关串口中断
+ 180   1        SBUF=dat;     
+ 181   1        while(TI!=1); //等待发送成功
+ 182   1        TI=0;     //清除发送中断标志
+ 183   1        ES=1;     //开串口中断
+ 184   1      }
+ 185          /*----------------------------
+ 186          UART1 发送字符串
+ 187          -----------------------------*/
+ 188          void UART1_SendString(char *s)
+ 189          {
+ 190   1        while(*s)//检测字符串结束符
+ 191   1        {
+ 192   2          UART1_SendData(*s++);//发送当前字符
+ 193   2        }
+ 194   1      }
+ 195          
+ 196          /**********************************
+ 197          发送命令
+ 198          **********************************/
+ 199          void UART1_Send_Command(char *s)
+ 200          {
+ 201   1        CLR_Buf(); 
+ 202   1        while(*s)//检测字符串结束符
+ 203   1        {
+ 204   2          UART1_SendData(*s++);//发送当前字符
+ 205   2        }
+ 206   1        UART1_SendLR();
+ 207   1      }
+ 208          
+ 209          void UART1_Send_Command_END(char *s)
+ 210          {
+ 211   1        CLR_Buf(); 
+ 212   1        while(*s)//检测字符串结束符
+ 213   1        {
+ 214   2          UART1_SendData(*s++);//发送当前字符
+ 215   2        }
+ 216   1      }
+ 217          
+ 218          /*******************************************************************************
+ 219          * 函数名 : Second_AT_Command
+ 220          * 描述   : 发送AT指令函数
+ 221          * 输入   : 发送数据的指针、希望收到的应答、发送等待时间(单位：interval_time*20 ms)
+ 222          * 输出   : 
+ 223          * 返回   : 
+ 224          * 注意   : 
+ 225          *******************************************************************************/
+ 226          
+ 227          u8 UART1_Send_AT_Command(u8 *b,u8 *a,u8 wait_time,u16 interval_time)         
+ 228          {
+ 229   1        u8 i;
+ 230   1      
+ 231   1        CLR_Buf(); 
+ 232   1        i = 0;
+ 233   1        while(i < wait_time)                    
+ 234   1        {
+ 235   2          UART1_Send_Command(b);
+ 236   2          delay_ms(interval_time);
+ 237   2          if(Find(a))            //查找需要应答的字符
+ 238   2          {
+ 239   3            return 1;
+C51 COMPILER V9.53.0.0   GSM                                                               05/14/2019 16:53:04 PAGE 5   
+
+ 240   3          }
+ 241   2          i++;
+ 242   2        }
+ 243   1        
+ 244   1        return 0;
+ 245   1      }
+ 246          
+ 247          void delay_ms(u16 ms)
+ 248          {
+ 249   1         count_20ms = ms;
+ 250   1         while(count_20ms);
+ 251   1      }
+ 252          
+ 253          
+ 254          u8 UART1_Send_AT_Command_END(u8 *b,u8 *a,u8 wait_time,u16 interval_time)         
+ 255          {
+ 256   1        u8 i;
+ 257   1      
+ 258   1        CLR_Buf(); 
+ 259   1        i = 0;
+ 260   1        while(i < wait_time)                    
+ 261   1        {
+ 262   2          UART1_Send_Command_END(b);
+ 263   2          delay_ms(interval_time);
+ 264   2          if(Find(a))            //查找需要应答的字符
+ 265   2          {
+ 266   3            return 1;
+ 267   3          }
+ 268   2          i++;
+ 269   2        }
+ 270   1        
+ 271   1        return 0;
+ 272   1      }
+ 273          
+ 274          /*******************************************************************************
+ 275          * 函数名 : Timer0_ISR
+ 276          * 描述   : 定时器0中断服务入口函数,1ms中断一次
+ 277          * 输入   : 
+ 278          * 输出   : 
+ 279          * 返回   : 
+ 280          * 注意   : 
+ 281          *******************************************************************************/
+ 282          void Timer0_ISR() interrupt 1
+ 283          {
+ 284   1        TR0=0;//关定时器
+ 285   1        TL0 = (65536-20000)%256;    //重设定时器初值
+ 286   1        TH0 = (65536-20000)/256;    //
+ 287   1        
+ 288   1        if(count_20ms > 0) //20ms延时计数器
+ 289   1        {
+ 290   2          count_20ms--;
+ 291   2        } 
+ 292   1        
+ 293   1        TR0=1;//开定时器
+ 294   1      }
+ 295          
+ 296          
+ 297          /********************* UART1中断函数************************/
+ 298          void UART1_ISR (void) interrupt 4
+ 299          {
+ 300   1        if (RI)
+ 301   1        {
+C51 COMPILER V9.53.0.0   GSM                                                               05/14/2019 16:53:04 PAGE 6   
+
+ 302   2          RI = 0;                           //清除RI位
+ 303   2          Uart1_Buf[First_Int] = SBUF;      //将接收到的字符串存到缓存中
+ 304   2          First_Int++;                    //缓存指针向后移动
+ 305   2          if(First_Int >= Buf_Max)          //如果缓存满,将缓存指针指向缓存的首地址
+ 306   2          {
+ 307   3            First_Int = 0;
+ 308   3          }   
+ 309   2        }
+ 310   1        if (TI)
+ 311   1        {
+ 312   2          TI = 0;                          //清除TI位
+ 313   2        }
+ 314   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    901    ----
+   CONSTANT SIZE    =     76    ----
+   XDATA SIZE       =     70    ----
+   PDATA SIZE       =      6      41
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)

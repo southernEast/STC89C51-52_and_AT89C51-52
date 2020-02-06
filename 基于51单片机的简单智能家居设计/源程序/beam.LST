@@ -1,0 +1,261 @@
+C51 COMPILER V9.53.0.0   BEAM                                                              05/10/2019 15:58:49 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE BEAM
+OBJECT MODULE PLACED IN beam.OBJ
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE beam.c COMPACT OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include "beam.h"
+   2          #include "LCD1602.h"
+   3          
+   4          uchar BUF[8];                         //接收数据缓存区        
+   5          uchar ge,shi,bai,qian,wan;            //显示变量
+   6          int dis_data;                       //变量
+   7          
+   8          void conversion(uint temp_data)  //  数据转换出 个，十，百，千，万
+   9          {  
+  10   1          wan=temp_data/10000+0x30 ;
+  11   1          temp_data=temp_data%10000;   //取余运算
+  12   1          qian=temp_data/1000+0x30 ;
+  13   1          temp_data=temp_data%1000;    //取余运算
+  14   1          bai=temp_data/100+0x30   ;
+  15   1          temp_data=temp_data%100;     //取余运算
+  16   1          shi=temp_data/10+0x30    ;
+  17   1          temp_data=temp_data%10;      //取余运算
+  18   1          ge=temp_data+0x30;  
+  19   1      }
+  20          
+  21          //毫秒延时**************************
+  22          void delay_nms(unsigned int k)  
+  23          {           
+  24   1        unsigned int i,j;       
+  25   1        for(i=0;i<k;i++)
+  26   1        {     
+  27   2          for(j=0;j<121;j++)      
+  28   2            ;
+  29   2        }           
+  30   1      }     
+  31          
+  32          /**************************************
+  33          延时5微秒(STC90C52RC@12M)
+  34          不同的工作环境,需要调整此函数，注意时钟过快时需要修改
+  35          当改用1T的MCU时,请调整此延时函数
+  36          **************************************/
+  37          void Delay5us()
+  38          {
+  39   1        _nop_();_nop_();_nop_();_nop_();
+  40   1        _nop_();_nop_();_nop_();_nop_();
+  41   1        _nop_();_nop_();_nop_();_nop_();
+  42   1        _nop_();_nop_();_nop_();_nop_();
+  43   1      }
+  44          
+  45          /**************************************
+  46          延时5毫秒(STC90C52RC@12M)
+  47          不同的工作环境,需要调整此函数
+  48          当改用1T的MCU时,请调整此延时函数
+  49          **************************************/
+  50          void Delay5ms()
+  51          {
+  52   1          uint n = 560;
+  53   1      
+  54   1          while (n--);
+  55   1      }
+C51 COMPILER V9.53.0.0   BEAM                                                              05/10/2019 15:58:49 PAGE 2   
+
+  56          
+  57          /**************************************
+  58          起始信号
+  59          **************************************/
+  60          void BH1750_Start()
+  61          {
+  62   1          SDA = 1;                    //拉高数据线
+  63   1          SCL = 1;                    //拉高时钟线
+  64   1          Delay5us();                 //延时
+  65   1          SDA = 0;                    //产生下降沿
+  66   1          Delay5us();                 //延时
+  67   1          SCL = 0;                    //拉低时钟线
+  68   1      }
+  69          
+  70          /**************************************
+  71          停止信号
+  72          **************************************/
+  73          void BH1750_Stop()
+  74          {
+  75   1          SDA = 0;                    //拉低数据线
+  76   1          SCL = 1;                    //拉高时钟线
+  77   1          Delay5us();                 //延时
+  78   1          SDA = 1;                    //产生上升沿
+  79   1          Delay5us();                 //延时
+  80   1      }
+  81          
+  82          /**************************************
+  83          发送应答信号
+  84          入口参数:ack (0:ACK 1:NAK)
+  85          **************************************/
+  86          void BH1750_SendACK(bit ack)
+  87          {
+  88   1          SDA = ack;                  //写应答信号
+  89   1          SCL = 1;                    //拉高时钟线
+  90   1          Delay5us();                 //延时
+  91   1          SCL = 0;                    //拉低时钟线
+  92   1          Delay5us();                 //延时
+  93   1      }
+  94          
+  95          /**************************************
+  96          接收应答信号
+  97          **************************************/
+  98          bit BH1750_RecvACK()
+  99          {
+ 100   1          SCL = 1;                    //拉高时钟线
+ 101   1          Delay5us();                 //延时
+ 102   1          CY = SDA;                   //读应答信号
+ 103   1          SCL = 0;                    //拉低时钟线
+ 104   1          Delay5us();                 //延时
+ 105   1      
+ 106   1          return CY;
+ 107   1      }
+ 108          
+ 109          /**************************************
+ 110          向IIC总线发送一个字节数据
+ 111          **************************************/
+ 112          void BH1750_SendByte(uchar dat)
+ 113          {
+ 114   1          uchar i;
+ 115   1      
+ 116   1          for (i=0; i<8; i++)         //8位计数器
+ 117   1          {
+C51 COMPILER V9.53.0.0   BEAM                                                              05/10/2019 15:58:49 PAGE 3   
+
+ 118   2              dat <<= 1;              //移出数据的最高位
+ 119   2              SDA = CY;               //送数据口
+ 120   2              SCL = 1;                //拉高时钟线
+ 121   2              Delay5us();             //延时
+ 122   2              SCL = 0;                //拉低时钟线
+ 123   2              Delay5us();             //延时
+ 124   2          }
+ 125   1          BH1750_RecvACK();
+ 126   1      }
+ 127          
+ 128          /**************************************
+ 129          从IIC总线接收一个字节数据
+ 130          **************************************/
+ 131          uchar BH1750_RecvByte()
+ 132          {
+ 133   1          uchar i;
+ 134   1          uchar dat = 0;
+ 135   1      
+ 136   1          SDA = 1;                    //使能内部上拉,准备读取数据,
+ 137   1          for (i=0; i<8; i++)         //8位计数器
+ 138   1          {
+ 139   2              dat <<= 1;
+ 140   2              SCL = 1;                //拉高时钟线
+ 141   2              Delay5us();             //延时
+ 142   2              dat |= SDA;             //读数据               
+ 143   2              SCL = 0;                //拉低时钟线
+ 144   2              Delay5us();             //延时
+ 145   2          }
+ 146   1          return dat;
+ 147   1      }
+ 148          
+ 149          //*********************************
+ 150          
+ 151          void Single_Write_BH1750(uchar REG_Address)
+ 152          {
+ 153   1          BH1750_Start();                  //起始信号
+ 154   1          BH1750_SendByte(SlaveAddress);   //发送设备地址+写信号
+ 155   1          BH1750_SendByte(REG_Address);    //内部寄存器地址，
+ 156   1        //  BH1750_SendByte(REG_data);       //内部寄存器数据，
+ 157   1          BH1750_Stop();                   //发送停止信号
+ 158   1      }
+ 159          
+ 160          //********单字节读取*****************************************
+ 161          /*
+ 162          uchar Single_Read_BH1750(uchar REG_Address)
+ 163          {  uchar REG_data;
+ 164              BH1750_Start();                          //起始信号
+ 165              BH1750_SendByte(SlaveAddress);           //发送设备地址+写信号
+ 166              BH1750_SendByte(REG_Address);                   //发送存储单元地址，从0开始 
+ 167              BH1750_Start();                          //起始信号
+ 168              BH1750_SendByte(SlaveAddress+1);         //发送设备地址+读信号
+ 169              REG_data=BH1750_RecvByte();              //读出寄存器数据
+ 170            BH1750_SendACK(1);   
+ 171            BH1750_Stop();                           //停止信号
+ 172              return REG_data; 
+ 173          }
+ 174          */
+ 175          //*********************************************************
+ 176          //
+ 177          //连续读出BH1750内部数据
+ 178          //
+ 179          //*********************************************************
+C51 COMPILER V9.53.0.0   BEAM                                                              05/10/2019 15:58:49 PAGE 4   
+
+ 180          void Multiple_read_BH1750(void)
+ 181          {  
+ 182   1         uchar i; 
+ 183   1         BH1750_Start();                          //起始信号
+ 184   1         BH1750_SendByte(SlaveAddress+1);         //发送设备地址+读信号
+ 185   1        
+ 186   1         for (i=0; i<3; i++)                      //连续读取2个地址数据，存储中BUF
+ 187   1         {
+ 188   2            BUF[i] = BH1750_RecvByte();          //BUF[0]存储0x32地址中的数据
+ 189   2            if (i == 3)
+ 190   2            {
+ 191   3      
+ 192   3               BH1750_SendACK(1);                //最后一个数据需要回NOACK
+ 193   3            }
+ 194   2            else
+ 195   2            {   
+ 196   3              BH1750_SendACK(0);                //回应ACK
+ 197   3            }
+ 198   2         }
+ 199   1      
+ 200   1          BH1750_Stop();                          //停止信号
+ 201   1          Delay5ms();
+ 202   1      }
+ 203          
+ 204          
+ 205          //初始化BH1750，根据需要请参考pdf进行修改****
+ 206          void Init_BH1750()
+ 207          {
+ 208   1         Single_Write_BH1750(0x01);  
+ 209   1      }
+ 210          
+ 211          void Show_Beam()
+ 212          {
+ 213   1        float temp;
+ 214   1        Single_Write_BH1750(0x01);   // power on
+ 215   1        Single_Write_BH1750(0x10);   // H- resolution mode
+ 216   1        delay_nms(180);              //延时180ms
+ 217   1        Multiple_Read_BH1750();       //连续读出数据，存储在BUF中
+ 218   1        dis_data=BUF[0];
+ 219   1        dis_data=(dis_data<<8)+BUF[1];//合成数据，即光照数据
+ 220   1        temp=(float)dis_data/1.2;
+ 221   1        conversion(temp);         //计算数据和显示
+ 222   1        LCD1602_write_com(0x80);
+ 223   1        LCD1602_write_word("Light: ");
+ 224   1        LCD1602_write_data(wan);
+ 225   1        LCD1602_write_data(qian);
+ 226   1        LCD1602_write_data(bai);
+ 227   1        LCD1602_write_data(shi);
+ 228   1        LCD1602_write_data(ge);
+ 229   1        LCD1602_write_word("  lx");
+ 230   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    506    ----
+   CONSTANT SIZE    =     13    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =     15    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----       1
+END OF MODULE INFORMATION.
+
+C51 COMPILER V9.53.0.0   BEAM                                                              05/10/2019 15:58:49 PAGE 5   
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

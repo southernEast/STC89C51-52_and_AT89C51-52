@@ -1,0 +1,39 @@
+C51 COMPILER V9.53.0.0   BUZZ                                                              05/10/2019 15:50:33 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE BUZZ
+OBJECT MODULE PLACED IN BUZZ.OBJ
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE BUZZ.c COMPACT OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include "BUZZ.h"
+   2          
+   3          void Delay(int i)
+   4          {
+   5   1        while(i--);
+   6   1      }
+   7          
+   8          void Ring()
+   9          {
+  10   1        int i;
+  11   1        for(i = 0; i < 100; i++){
+  12   2          BEEP = 0;
+  13   2          Delay(100);
+  14   2          BEEP = 1;
+  15   2        }
+  16   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     37    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

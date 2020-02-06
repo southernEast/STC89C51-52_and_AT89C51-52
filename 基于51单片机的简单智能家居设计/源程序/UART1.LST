@@ -1,0 +1,79 @@
+C51 COMPILER V9.52.0.0   UART1                                                             10/25/2016 18:08:01 PAGE 1   
+
+
+C51 COMPILER V9.52.0.0, COMPILATION OF MODULE UART1
+OBJECT MODULE PLACED IN UART1.OBJ
+COMPILER INVOKED BY: E:\Keilc51\C51\BIN\C51.EXE UART1.c BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include  "STC15Fxxxx.H"
+   2          
+   3          /*************  本地常量声明  **************/
+   4          #define MAIN_Fosc   11059200L //定义主时钟
+   5          #define RX1_Lenth   32      //串口接收缓冲长度
+   6          #define BaudRate1   115200UL  //选择波特率
+   7          
+   8          #define Timer1_Reload (65536UL -(MAIN_Fosc / 4 / BaudRate1))    //Timer 1 重装值， 对应300KHZ
+   9          #define Timer2_Reload (65536UL -(MAIN_Fosc / 4 / BaudRate1))    //Timer 2 重装值， 对应300KHZ
+  10          /*----------------------------
+  11          UART1 发送串口数据
+  12          -----------------------------*/
+  13          #define uchar unsigned char
+  14          void UART1_SendData(uchar dat)
+  15          {
+  16   1        ES=0;         //关串口中断
+  17   1        SBUF=dat;     
+  18   1        while(TI!=1); //等待发送成功
+  19   1        TI=0;         //清除发送中断标志
+  20   1        ES=1;         //开串口中断
+  21   1      }
+  22          /*----------------------------
+  23          UART1 发送字符串
+  24          -----------------------------*/
+  25          void UART1_SendString(char *s)
+  26          {
+  27   1        while(*s)//检测字符串结束符
+  28   1        {
+  29   2          UART1_SendData(*s++);//发送当前字符
+  30   2        }
+  31   1      }
+  32          /*----------------------------
+  33          UART1 初始化
+  34          -----------------------------*/
+  35          void USART1_Init(void)
+  36          {
+  37   1        S1_8bit();        //8位数据
+  38   1        //S1_USE_P30P31();    //UART1 使用P30 P31口 默认
+  39   1        S1_USE_P36P37();    //UART1 使用P36 P37口
+  40   1        //S1_USE_P16P17();    //UART1 使用P16 P17口
+  41   1        AUXR &= ~(1<<4);  //Timer stop    波特率使用Timer2产生
+  42   1        AUXR |= 0x01;   //S1 BRT Use Timer2;
+  43   1        AUXR |=  (1<<2);  //Timer2 set as 1T mode
+  44   1        TH2 = (u8)(Timer2_Reload >> 8);
+  45   1        TL2 = (u8)Timer2_Reload;
+  46   1        AUXR |=  (1<<4);  //Timer run enable
+  47   1      
+  48   1        REN = 1;  //允许接收
+  49   1        ES  = 1;  //允许中断
+  50   1      
+  51   1        EA = 1;   //允许全局中断
+  52   1        
+  53   1      
+  54   1      }
+
+C51 COMPILER V9.52.0.0   UART1                                                             10/25/2016 18:08:01 PAGE 2   
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     90    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----       3
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
