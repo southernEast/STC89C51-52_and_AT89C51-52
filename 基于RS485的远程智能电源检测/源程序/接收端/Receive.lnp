@@ -1,0 +1,5 @@
+"Main.obj",
+"LCD1602.obj",
+"ReceiveMessage.obj" 
+TO "Receive" 
+RAMSIZE(256) 

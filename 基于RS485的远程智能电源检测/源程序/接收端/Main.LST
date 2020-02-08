@@ -1,0 +1,60 @@
+C51 COMPILER V9.53.0.0   MAIN                                                              05/15/2019 13:54:43 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN Main.OBJ
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE Main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include <reg52.h>
+   2          #include <stdio.h>
+   3          #include "LCD1602.h"
+   4          #include "ReceiveMessage.h"
+   5          
+   6          #define uchar unsigned char
+   7          #define uint  unsigned int
+   8          
+   9          
+  10          void delay(uint k);
+  11          
+  12          void main(void)
+  13          {
+  14   1        InitLcd();      // lcd初始化
+  15   1        display_1602("Welcome to use!!", 0, 0);
+  16   1        Init();         // 串口初始化
+  17   1        RS485Init();    // RS485初始化
+  18   1      
+  19   1        while(1)
+  20   1        {
+  21   2          receiveString1();         // 接收第一行
+  22   2          receiveString2();         // 接收第二行
+  23   2          delay(100);
+  24   2      
+  25   2          show();                   // 显示数据
+  26   2        }
+  27   1      }
+  28          
+  29          void delay(uint k)  
+  30          {           
+  31   1        uint i,j;       
+  32   1        for(i=0;i<k;i++)
+  33   1        {     
+  34   2          for(j=0;j<121;j++)      
+  35   2          {;}
+  36   2        }           
+  37   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     75    ----
+   CONSTANT SIZE    =     17    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

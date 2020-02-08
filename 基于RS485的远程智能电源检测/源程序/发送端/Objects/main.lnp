@@ -1,0 +1,7 @@
+".\Objects\STARTUP.obj",
+".\Objects\main.obj",
+".\Objects\delay.obj",
+".\Objects\i2c.obj",
+".\Objects\SendMessage.obj" 
+TO ".\Objects\main" 
+PRINT(".\Listings\main.m51") RAMSIZE(256) 
