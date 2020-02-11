@@ -1,0 +1,109 @@
+C51 COMPILER V9.53.0.0   CARS                                                              05/28/2019 14:05:30 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE CARS
+OBJECT MODULE PLACED IN .\Objects\cars.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE cars.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\cars
+                    -.lst) TABS(2) OBJECT(.\Objects\cars.obj)
+
+line level    source
+
+   1          #include "cars.h"
+   2          
+   3          
+   4          /**统计车辆**/
+   5          uchar outBuf[16];       // 输出字符串数组
+   6          uchar parkingFlag[4];   // 四个停车位标志
+   7          uint num;               // 车辆数目计数
+   8          
+   9          void cars_delay(uint i)
+  10          {
+  11   1        while(i--);
+  12   1      }
+  13          
+  14          /**统计当前停车场车辆数目**/
+  15          void countNum()
+  16          {
+  17   1        if(inDetect == 0){    // 进入车辆
+  18   2          while(!inDetect)
+  19   2            ;
+  20   2          num++;
+  21   2        }
+  22   1        if(outDetect == 0){   // 离开车辆
+  23   2          while(!outDetect)
+  24   2            ;
+  25   2          if(num > 0)
+  26   2            num--;
+  27   2        }
+  28   1      }
+  29          
+  30          /**扫描车位**/
+  31          void parkingPlaceScan()
+  32          {
+  33   1        if(parking0 == 0){      // 检测到车辆信号
+  34   2            cars_delay(100);
+  35   2            if(parking0 == 0){
+  36   3              parkingFlag[0] = 'Y';
+  37   3            }
+  38   2          }
+  39   1          else{                 // 无车辆信号
+  40   2            parkingFlag[0] = 'N';
+  41   2          }
+  42   1          if(parking1 == 0){
+  43   2            cars_delay(100);
+  44   2            if(parking1 == 0){
+  45   3              parkingFlag[1] = 'Y';
+  46   3            }
+  47   2          }
+  48   1          else{
+  49   2            parkingFlag[1] = 'N';
+  50   2          }
+  51   1          if(parking2 == 0){
+  52   2            cars_delay(100);
+  53   2            if(parking2 == 0){
+  54   3              parkingFlag[2] = 'Y';
+C51 COMPILER V9.53.0.0   CARS                                                              05/28/2019 14:05:30 PAGE 2   
+
+  55   3            }
+  56   2          }
+  57   1          else{
+  58   2            parkingFlag[2] = 'N';
+  59   2          }
+  60   1          if(parking3 == 0){
+  61   2            cars_delay(100);
+  62   2            if(parking3 == 0){
+  63   3              parkingFlag[3] = 'Y';
+  64   3            }
+  65   2          }
+  66   1          else{
+  67   2            parkingFlag[3] = 'N';
+  68   2          }
+  69   1      }
+  70          
+  71          void showInfo()
+  72          {
+  73   1        sprintf(outBuf, "%c %c %c %c  %4d   ", 
+  74   1                parkingFlag[0], parkingFlag[1], parkingFlag[2], parkingFlag[3], num);     // 将需要显示的信息存入字符数
+             -组
+  75   1        parkingPlaceScan();             // 扫描车位信息
+  76   1        LCD1602_write_com(0x80);
+  77   1        LCD1602_write_word("1 2 3 4 NOW NUM:"); // LCD显示第一行
+  78   1        LCD1602_write_com(0xc0);
+  79   1        LCD1602_write_word(outBuf);     // LCD显示第二行
+  80   1        countNum();
+  81   1      
+  82   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    193    ----
+   CONSTANT SIZE    =     37    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     22    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

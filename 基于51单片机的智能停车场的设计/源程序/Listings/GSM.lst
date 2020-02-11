@@ -1,0 +1,527 @@
+C51 COMPILER V9.53.0.0   GSM                                                               05/28/2019 14:10:07 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE GSM
+OBJECT MODULE PLACED IN .\Objects\GSM.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE GSM.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\GSM.l
+                    -st) TABS(2) OBJECT(.\Objects\GSM.obj)
+
+line level    source
+
+   1          #include "GSM.h"
+   2          
+   3          typedef unsigned char u8;
+   4          typedef unsigned int  u16;
+   5          typedef unsigned long u32;
+   6          
+   7          /*************  ±¾µØ±äÁ¿ÉùÃ÷  **************/
+   8          xdata u8 Uart1_Buf[Buf_Max];
+   9          u8 First_Int = 0;
+  10          
+  11          u8 outInfo[50];           // Êä³ö
+  12          u16 count_20ms;
+  13          u8  receive_mode     = 0;
+  14          u8  find_string_flag = 0;
+  15          idata char num_message[4];//ÔÝÊ±¼ÙÉè×î¶àÖ»ÄÜ´æ999Ìõ¶ÌÐÅ
+  16          idata char AT_CMGR[15];
+  17          
+  18          idata char  extract_phone_num[29];   // ºÅÂëÔÝ´æ 
+  19          idata char AT_CMGS_TEMP[29];
+  20          idata char phone_number[15];        // ·¢ËÍºÅÂë
+  21          idata char end_char[2] = {0x1a, 0};
+  22          
+  23          /*************  ±¾µØº¯ÊýÉùÃ÷  **************/
+  24          void delay_ms(u16 ms);   //ÑÓÊ±ms¸ö20ms  ms*20ms
+  25          void CLR_Buf(void);      //Çå´®¿Ú½ÓÊÕ»º´æ
+  26          u8   Find(u8 *a);        //²éÕÒ×Ö·û´®
+  27          void UART1_SendData(u8 dat);   //´®¿Ú1·¢ËÍ 1×Ö½Ú
+  28          void UART1_SendString(char *s);//´®¿Ú1·¢ËÍ ×Ö·û´®
+  29          void UART1_Send_Command(char *s);
+  30          u8 UART1_Send_AT_Command(u8 *b,u8 *a,u8 wait_time,u16 interval_time);
+  31          u8 Wait_CREG(u8 query_times);
+  32          
+  33          
+  34          /**¶¨Ê±Æ÷³õÊ¼»¯**/
+  35          void Timer0Init(void)   //20ºÁÃë@115200
+  36          {
+  37   1        TMOD &= 0xF0;         
+  38   1        TMOD |= 0x01;         //    
+  39   1        TL0 = (65536-20000)%256;    //
+  40   1        TH0 = (65536-20000)/256;    //
+  41   1        TF0 = 0;    //
+  42   1        ET0 = 1;        //
+  43   1        TR0 = 1;    //¿ªÊ¼¼ÆÊ±
+  44   1      }
+  45          
+  46          /**´®¿Ú³õÊ¼»¯**/
+  47          void Uart1Init(void)    //9600bps@11.05926MHz
+  48          {
+  49   1        PCON &= 0x7F;   // ²¨ÌØÂÊ²»±¶Ôö
+  50   1        SCON = 0x50;    // ´®¿Ú·½Ê½2
+  51   1        TMOD &= 0x0F;   // ¶¨Ê±Æ÷8Î»×Ô¶¯ÖØ×°ÔØ
+  52   1        TMOD |= 0x20;   //
+  53   1        TL1 = 0xFD;     //
+  54   1        TH1 = 0xFD;     //
+C51 COMPILER V9.53.0.0   GSM                                                               05/28/2019 14:10:07 PAGE 2   
+
+  55   1        ET1 = 0;      //
+  56   1        TR1 = 1;        //
+  57   1        ES  = 1;          //
+  58   1      }
+  59          
+  60          /**µÈ´ýÄ£¿é×¢²á**/
+  61          u8 Wait_CREG(u8 query_times)
+  62          {
+  63   1        u8 i;
+  64   1        u8 k;
+  65   1        u8 j;
+  66   1        i = 0;
+  67   1        CLR_Buf();
+  68   1        while(i == 0)             
+  69   1        {
+  70   2      
+  71   2          UART1_Send_Command("AT+CREG?");
+  72   2          delay_ms(100); 
+  73   2          
+  74   2          for(k=0;k<Buf_Max;k++)            
+  75   2          {
+  76   3            if((Uart1_Buf[k] == '+')&&(Uart1_Buf[k+1] == 'C')&&(Uart1_Buf[k+2] == 'R')&&(Uart1_Buf[k+3] == 'E')&&(U
+             -art1_Buf[k+4] == 'G')&&(Uart1_Buf[k+5] == ':'))
+  77   3            {
+  78   4                 
+  79   4              if((Uart1_Buf[k+7] == '1')&&((Uart1_Buf[k+9] == '1')||(Uart1_Buf[k+9] == '5')))
+  80   4              {
+  81   5                i = 1;
+  82   5                return 1;
+  83   5              }
+  84   4              
+  85   4            }
+  86   3          }
+  87   2          j++;
+  88   2          if(j > query_times)
+  89   2          {
+  90   3            return 0;
+  91   3          }
+  92   2          
+  93   2        }
+  94   1        return 0;
+  95   1      }
+  96          
+  97          /**¼ì²â×´Ì¬**/
+  98          int check_status(void)
+  99          {
+ 100   1        int ret;
+ 101   1        
+ 102   1        ret = UART1_Send_AT_Command("AT","OK",3,50);//²âÊÔÍ¨ÐÅÊÇ·ñ³É¹¦
+ 103   1        if(ret == 0)
+ 104   1        {
+ 105   2          return COMMUNITE_ERROR;
+ 106   2        }
+ 107   1        
+ 108   1        ret = UART1_Send_AT_Command("AT+CPIN?","READY",2,50);//²éÑ¯¿¨ÊÇ·ñ²åÉÏ
+ 109   1        if(ret == 0)
+ 110   1        {
+ 111   2          return NO_SIM_CARD_ERROR;
+ 112   2        }
+ 113   1        
+ 114   1        ret = Wait_CREG(3);//²éÑ¯¿¨ÊÇ·ñ×¢²áµ½ÍøÂç
+ 115   1        if(ret == 0)
+C51 COMPILER V9.53.0.0   GSM                                                               05/28/2019 14:10:07 PAGE 3   
+
+ 116   1        {
+ 117   2          return SIM_CARD_NO_REG_ERROR;
+ 118   2        }
+ 119   1        return 1;
+ 120   1      }
+ 121          
+ 122          
+ 123          /**ÅäÖÃ½ÓÊÕÐÅÏ¢Ä£Ê½**/
+ 124          int config_format(void)
+ 125          {
+ 126   1        u8 ret;
+ 127   1      
+ 128   1        UART1_Send_Command("ATE0");         // ¹Ø±Õ»ØÏÔ
+ 129   1        delay_ms(50);
+ 130   1        
+ 131   1        UART1_Send_Command("AT+CPMS=\"SM\",\"ME\",\"SM\"");   // ÉèÖÃ´æ´¢Î»ÖÃ
+ 132   1        delay_ms(50);
+ 133   1      
+ 134   1        ret = UART1_Send_AT_Command("AT+CNMI=2,1","OK",3,100);
+ 135   1        if(ret == 0)
+ 136   1        {
+ 137   2          return AT_CNMI_ERROR;
+ 138   2        }
+ 139   1        
+ 140   1        ret = UART1_Send_AT_Command("AT+CMGF=1","OK",3,50);   // ÅäÖÃÎªTEXTÄ£Ê½
+ 141   1        if(ret == 0)
+ 142   1        {
+ 143   2          return AT_CMGF_ERROR;
+ 144   2        }
+ 145   1        
+ 146   1        ret = UART1_Send_AT_Command("AT+CSCS=\"GSM\"","OK",3,50);// ÉèÖÃ×Ö·û¸ñÊ½
+ 147   1        if(ret == 0)
+ 148   1        {
+ 149   2          return AT_CSCS_ERROR;
+ 150   2        }
+ 151   1        return 1;
+ 152   1      }
+ 153          
+ 154          /**»ñÈ¡ÐÅÏ¢Î»ÖÃ ²¢·¢ËÍ¶ÁÈ¡½ÓÊÕÐÅÏ¢Ö¸Áî**/
+ 155          int read_message(void)
+ 156          {
+ 157   1        char *buffer_ptr;
+ 158   1        u8 i,len;
+ 159   1        u8 ret;
+ 160   1        
+ 161   1        memset(num_message,'\0',4);     // Çå¿ÕÏà¹Ø»º´æÇø
+ 162   1        memset(AT_CMGR,'\0',15);
+ 163   1        buffer_ptr = strstr(Uart1_Buf,"\"SM\",");
+ 164   1        
+ 165   1        len = strlen("\"SM\",");
+ 166   1      
+ 167   1        i = len;
+ 168   1        if(buffer_ptr != NULL)          // »ñÈ¡ÐÅÏ¢Î»ÖÃ
+ 169   1        {
+ 170   2          while(*(buffer_ptr + i) != 0x0D && i < (len+3))
+ 171   2          {
+ 172   3            num_message[i-len] = *(buffer_ptr + i);
+ 173   3            i++;
+ 174   3          }
+ 175   2        }
+ 176   1        else
+ 177   1        {
+C51 COMPILER V9.53.0.0   GSM                                                               05/28/2019 14:10:07 PAGE 4   
+
+ 178   2          return NO_SMS_LEN_ERROR;
+ 179   2        }
+ 180   1        
+ 181   1        memset(AT_CMGR,'\0',15);
+ 182   1        strcpy(AT_CMGR,"AT+CMGR=");       // ÉèÖÃ¶ÁÈ¡ÐÅÏ¢Ö¸Áî
+ 183   1        strcat(AT_CMGR,num_message);
+ 184   1        
+ 185   1        ret = UART1_Send_AT_Command(AT_CMGR,"OK",3,50*4); // ·¢ËÍÖ¸Áî
+ 186   1      
+ 187   1        return ret;
+ 188   1      }
+ 189          
+ 190          /**´ÓÊÕ¼þÐÅÏ¢ÖÐ»ñÈ¡·¢ËÍÈËÊÖ»úºÅÂë**/
+ 191          void extract_phone_number(void)
+ 192          {
+ 193   1        u8 pos;
+ 194   1        u8 i;
+ 195   1      
+ 196   1        memset(phone_number,'\0',12);   // Çå¿Õ»º´æ
+ 197   1        
+ 198   1        for(i = 0;i < Buf_Max;i++)
+ 199   1        {
+ 200   2          if(Uart1_Buf[i] == '\"' && Uart1_Buf[i+1] == ',' && Uart1_Buf[i+2] == '\"')
+ 201   2          {
+ 202   3            pos = i + 3;
+ 203   3            break;
+ 204   3          }
+ 205   2        }
+ 206   1        i = 0;
+ 207   1        while(Uart1_Buf[pos] != '\"' && i < 14)
+ 208   1        {
+ 209   2          phone_number[i] = Uart1_Buf[pos];
+ 210   2          pos++;
+ 211   2          i++;
+ 212   2        }
+ 213   1        
+ 214   1        memset(AT_CMGS_TEMP,'\0',25);
+ 215   1        strcpy(AT_CMGS_TEMP,"AT+CMGS=\"");    // ÉèÖÃ·¢ËÍÐÅÏ¢Ö¸Áî
+ 216   1        strcat(AT_CMGS_TEMP,phone_number);
+ 217   1        strcat(AT_CMGS_TEMP,"\"\r");
+ 218   1        
+ 219   1        memset(extract_phone_num,'\0',30);
+ 220   1        strcpy(extract_phone_num,AT_CMGS_TEMP);
+ 221   1        
+ 222   1      }
+ 223          
+ 224          /**·¢ËÍÎÄ±¾ÐÅÏ¢**/
+ 225          int send_text_message(char *content)
+ 226          {
+ 227   1        u8 ret;
+ 228   1        
+ 229   1        end_char[0] = 0x1A;//½áÊø×Ö·û
+ 230   1        end_char[1] = '\0';
+ 231   1        
+ 232   1        
+ 233   1        ret = UART1_Send_AT_Command("AT+CMGF=1","OK",3,50);//ÅäÖÃÎªTEXTÄ£Ê½
+ 234   1        if(ret == 0)
+ 235   1        {
+ 236   2          return AT_CMGF_ERROR;
+ 237   2        }
+ 238   1        
+ 239   1        
+C51 COMPILER V9.53.0.0   GSM                                                               05/28/2019 14:10:07 PAGE 5   
+
+ 240   1        ret = UART1_Send_AT_Command("AT+CSCS=\"GSM\"","OK",3,50);//ÉèÖÃ×Ö·û¸ñÊ½
+ 241   1        if(ret == 0)
+ 242   1        {
+ 243   2          return AT_CSCS_ERROR;
+ 244   2        }
+ 245   1        
+ 246   1        ret = UART1_Send_AT_Command(extract_phone_num,">",3,50);//ÊäÈëÊÕÐÅÈËµÄµç»°ºÅÂë
+ 247   1        if(ret == 0)
+ 248   1        {
+ 249   2              return AT_CMGS_ERROR;
+ 250   2        }    
+ 251   1        
+ 252   1        UART1_SendString(content); //´Ëº¯Êý·¢ËÍ¶ÌÐÅÄÚÈÝ ²»¼Ó»Ø³µ»»ÐÐ
+ 253   1        ret = UART1_Send_AT_Command(end_char,"OK",1,250);//·¢ËÍ½áÊø·û£¬µÈ´ý·µ»Øok,µÈ´ý5S·¢Ò»´Î£¬ÒòÎª¶ÌÐÅ³É¹¦·¢ËÍµ
+             -Ä×´Ì¬Ê±¼ä±È½Ï³¤
+ 254   1        if(ret == 0)
+ 255   1        {
+ 256   2          return END_CHAR_ERROR;
+ 257   2        }
+ 258   1        
+ 259   1        return 1;
+ 260   1      }
+ 261          
+ 262          
+ 263          /**¶¨Ê±Æ÷0ÖÐ¶Ï·þÎñÈë¿Úº¯Êý,1msÖÐ¶ÏÒ»´Î**/
+ 264          void Timer0_ISR() interrupt 1
+ 265          {
+ 266   1        TR0=0;//¹Ø¶¨Ê±Æ÷
+ 267   1        TL0 = (65536-20000)%256;    //ÖØÉè¶¨Ê±Æ÷³õÖµ
+ 268   1        TH0 = (65536-20000)/256;    //
+ 269   1        
+ 270   1        if(count_20ms > 0) //20msÑÓÊ±¼ÆÊýÆ÷
+ 271   1        {
+ 272   2          count_20ms--;
+ 273   2        } 
+ 274   1        
+ 275   1        TR0=1;//¿ª¶¨Ê±Æ÷
+ 276   1      }
+ 277          
+ 278          
+ 279          /** UART1ÖÐ¶Ïº¯Êý**/
+ 280          void UART1_ISR (void) interrupt 4
+ 281          {
+ 282   1        if (RI)
+ 283   1        {
+ 284   2          RI = 0;                           // Çå³ýRIÎ»
+ 285   2          Uart1_Buf[First_Int] = SBUF;      // ½«½ÓÊÕµ½µÄ×Ö·û´®´æµ½»º´æÖÐ
+ 286   2          First_Int++;                      // »º´æÖ¸ÕëÏòºóÒÆ¶¯
+ 287   2          if(First_Int >= Buf_Max)          // Èç¹û»º´æÂú,½«»º´æÖ¸ÕëÖ¸Ïò»º´æµÄÊ×µØÖ·
+ 288   2          {
+ 289   3            First_Int = 0;
+ 290   3          }
+ 291   2          
+ 292   2          if(receive_mode == 1)
+ 293   2          {
+ 294   3            if(First_Int > 6)
+ 295   3            {
+ 296   4              find_string_flag = 1;
+ 297   4            }
+ 298   3        
+ 299   3          }
+ 300   2        }
+C51 COMPILER V9.53.0.0   GSM                                                               05/28/2019 14:10:07 PAGE 6   
+
+ 301   1        if (TI)
+ 302   1        {
+ 303   2          TI = 0;                          //Çå³ýTIÎ»
+ 304   2        }
+ 305   1      }
+ 306          
+ 307          
+ 308          /**Çå³ý´®¿Ú2»º´æÊý¾Ý**/
+ 309          void CLR_Buf(void)
+ 310          {
+ 311   1        u8 k;
+ 312   1        for(k=0;k<Buf_Max;k++)      //½«»º´æÄÚÈÝÇåÁã
+ 313   1        {
+ 314   2          Uart1_Buf[k] = 0x00;
+ 315   2        }
+ 316   1          First_Int = 0;              //½ÓÊÕ×Ö·û´®µÄÆðÊ¼´æ´¢Î»ÖÃ
+ 317   1      }
+ 318          
+ 319          
+ 320          /**ÅÐ¶Ï»º´æÖÐÊÇ·ñº¬ÓÐÖ¸¶¨µÄ×Ö·û´®**/
+ 321          u8 Find(u8 *a)
+ 322          { 
+ 323   1        ES = 0;  //¸Ä½ø³ÌÐò
+ 324   1        if(strstr(Uart1_Buf,a)!=NULL)
+ 325   1        {
+ 326   2          ES = 1;
+ 327   2          return 1;
+ 328   2        } 
+ 329   1        else
+ 330   1        {
+ 331   2          ES = 1;
+ 332   2          return 0;
+ 333   2        }
+ 334   1          
+ 335   1      }
+ 336          
+ 337          /**UART1 ·¢ËÍ´®¿ÚÊý¾Ý**/
+ 338          void UART1_SendData(u8 dat)
+ 339          {
+ 340   1        ES=0;     //¹Ø´®¿ÚÖÐ¶Ï
+ 341   1        SBUF=dat;     
+ 342   1        while(TI!=1); //µÈ´ý·¢ËÍ³É¹¦
+ 343   1        TI=0;     //Çå³ý·¢ËÍÖÐ¶Ï±êÖ¾
+ 344   1        ES=1;     //¿ª´®¿ÚÖÐ¶Ï
+ 345   1      }
+ 346          
+ 347          /**UART1 ·¢ËÍ×Ö·û´®**/
+ 348          void UART1_SendString(char *s)
+ 349          {
+ 350   1        while(*s)//¼ì²â×Ö·û´®½áÊø·û
+ 351   1        {
+ 352   2          UART1_SendData(*s++);//·¢ËÍµ±Ç°×Ö·û
+ 353   2        }
+ 354   1      }
+ 355          
+ 356          
+ 357          /**·¢ËÍÃüÁî**/
+ 358          void UART1_Send_Command(char *s)
+ 359          {
+ 360   1        CLR_Buf(); 
+ 361   1        while(*s)//¼ì²â×Ö·û´®½áÊø·û
+ 362   1        {
+C51 COMPILER V9.53.0.0   GSM                                                               05/28/2019 14:10:07 PAGE 7   
+
+ 363   2          UART1_SendData(*s++);//·¢ËÍµ±Ç°×Ö·û
+ 364   2        }
+ 365   1        UART1_SendLR();
+ 366   1      }
+ 367          
+ 368          /**·¢ËÍATÖ¸Áîº¯Êý
+ 369          ÊäÈë: ·¢ËÍÊý¾ÝµÄÖ¸Õë¡¢Ï£ÍûÊÕµ½µÄÓ¦´ð¡¢·¢ËÍµÈ´ýÊ±¼ä(µ¥Î»£ºinterval_time*20 ms)
+ 370          **/
+ 371          u8 UART1_Send_AT_Command(u8 *b,u8 *a,u8 wait_time,u16 interval_time)         
+ 372          {
+ 373   1        u8 i;
+ 374   1      
+ 375   1        CLR_Buf();              // Çå¿Õ½ÓÊÕ»º´æ
+ 376   1        i = 0;
+ 377   1        while(i < wait_time)                    
+ 378   1        {
+ 379   2          UART1_Send_Command(b);
+ 380   2          delay_ms(interval_time);
+ 381   2          if(Find(a))            //²éÕÒÐèÒªÓ¦´ðµÄ×Ö·û
+ 382   2          {
+ 383   3            return 1;
+ 384   3          }
+ 385   2          i++;
+ 386   2        }
+ 387   1        
+ 388   1        return 0;
+ 389   1      }
+ 390          
+ 391          /**ÑÓÊ±º¯Êý**/
+ 392          void delay_ms(u16 ms)
+ 393          {
+ 394   1         count_20ms = ms;
+ 395   1         while(count_20ms);
+ 396   1      }
+ 397          
+ 398          
+ 399          /**GSM³õÊ¼»¯**/
+ 400          void GSM_init()
+ 401          {
+ 402   1        int i;
+ 403   1        Uart1Init();                // ´®¿Ú³õÊ¼»¯
+ 404   1        Timer0Init();               // TIM0³õÊ¼»¯
+ 405   1        EA = 1;                     // ¿ªÆô×ÜÖÐ¶Ï
+ 406   1        
+ 407   1        for(i = 0;i < STABLE_TIMES;i++) // µÈ´ýÍøÂçÎÈ¶¨
+ 408   1        {
+ 409   2          delay_ms(50);
+ 410   2        }
+ 411   1        
+ 412   1        check_status();
+ 413   1        config_format();
+ 414   1        
+ 415   1        CLR_Buf();
+ 416   1        receive_mode = 1;
+ 417   1        
+ 418   1        LCD1602_write_com(0x80);
+ 419   1        LCD1602_write_word(" Initialized OK ");
+ 420   1        delay_ms(100);
+ 421   1      }
+ 422          
+ 423          /**É¨Ãè½ÓÊÕÐÅÏ¢**/
+ 424          void GSM_scan()
+C51 COMPILER V9.53.0.0   GSM                                                               05/28/2019 14:10:07 PAGE 8   
+
+ 425          {
+ 426   1        int ret;
+ 427   1        if(find_string_flag == 1) // ½ÓÊÕµ½ÐÅºÅ±êÖ¾   
+ 428   1        {
+ 429   2          delay_ms(5);            // ÑÓÊ±Ò»µã£¬ÈÃ´®¿Ú°ÑÊý¾Ý½ÓÊÕÍê³É
+ 430   2          if(Find("+CMTI"))       // ½ÓÊÕµ½ÁË¶ÌÐÅ
+ 431   2          {
+ 432   3            ret = read_message(); // ²é¿´½ÓÊÕµ½µÄ¶ÌÐÅ
+ 433   3            if(ret == 1)          // ¶ÌÐÅ½ÓÊÕ³É¹¦
+ 434   3            {
+ 435   4              if(Find("information"))   
+ 436   4              {
+ 437   5                LCD1602_write_com(0xc0);
+ 438   5                LCD1602_write_word(" Find  Successed");
+ 439   5                delay_ms(100);
+ 440   5                extract_phone_number(); // ÌáÈ¡ºÅÂë
+ 441   5                
+ 442   5                sprintf(outInfo, "park1:%c\n park2:%c\n park3:%c\n park4:%c\n now Num:%d", 
+ 443   5                        parkingFlag[0], parkingFlag[1], parkingFlag[2], parkingFlag[3], num);
+ 444   5                ret = send_text_message(outInfo);
+ 445   5                if(ret == 1)
+ 446   5                {
+ 447   6                    LCD1602_write_com(0xc0);
+ 448   6                    LCD1602_write_word(" Send  Successed");
+ 449   6                    delay_ms(100);
+ 450   6                }
+ 451   5                else
+ 452   5                {
+ 453   6                    LCD1602_write_com(0xc0);
+ 454   6                    LCD1602_write_word(" Send  Failed   ");
+ 455   6                    delay_ms(100);
+ 456   6                }
+ 457   5                CLR_Buf();
+ 458   5                find_string_flag = 0;
+ 459   5              }
+ 460   4              else
+ 461   4              {
+ 462   5                LCD1602_write_com(0xc0);
+ 463   5                LCD1602_write_word(" Find    Failed ");
+ 464   5                delay_ms(100);
+ 465   5                extract_phone_number();
+ 466   5                ret = send_text_message("This command is not supported!");
+ 467   5                if(ret == 1)
+ 468   5                {
+ 469   6                    LCD1602_write_com(0xc0);
+ 470   6                    LCD1602_write_word(" Send  Successed");
+ 471   6                    delay_ms(100);
+ 472   6                }
+ 473   5                else
+ 474   5                {
+ 475   6                    LCD1602_write_com(0xc0);
+ 476   6                    LCD1602_write_word(" Send  Failed   ");
+ 477   6                    delay_ms(100);
+ 478   6                }
+ 479   5                CLR_Buf();
+ 480   5                find_string_flag = 0;
+ 481   5              }
+ 482   4            }
+ 483   3          }     
+ 484   2        } 
+ 485   1      }
+
+C51 COMPILER V9.53.0.0   GSM                                                               05/28/2019 14:10:07 PAGE 9   
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1644    ----
+   CONSTANT SIZE    =    309    ----
+   XDATA SIZE       =     85    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     55      33
+   IDATA SIZE       =     94    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
