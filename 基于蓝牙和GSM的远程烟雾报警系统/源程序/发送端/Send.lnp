@@ -1,0 +1,4 @@
+"Main.obj",
+"SendMessage.obj" 
+TO "Send" 
+RAMSIZE(256) 

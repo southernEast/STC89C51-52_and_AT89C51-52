@@ -1,0 +1,4 @@
+"Main.obj",
+"ReceiveMessage.obj" 
+TO "Receive" 
+RAMSIZE(256) 

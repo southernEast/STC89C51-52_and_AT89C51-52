@@ -1,0 +1,47 @@
+C51 COMPILER V9.53.0.0   MAIN                                                              05/16/2019 22:09:31 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN Main.OBJ
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE Main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include "ReceiveMessage.h"
+   2          
+   3          void main(void)
+   4          {
+   5   1      
+   6   1        Init();         // 串口初始化
+   7   1        
+   8   1        while(1)
+   9   1        {
+  10   2          receive();    // 接收信息
+  11   2          delay(100);
+  12   2          if(select()){ // 判断是否发生火灾
+  13   3            EA = 0;     // 关闭总中断
+  14   3            beep = 0;   // 开启蜂鸣器
+  15   3            led = 0;    // 开启应急灯
+  16   3            delay(5000);
+  17   3            EA = 1;     // 开启总中断
+  18   3          }
+  19   2          else{
+  20   3            beep = 1;   // 关闭蜂鸣器
+  21   3            led = 1;    // 关闭应急灯
+  22   3          }
+  23   2        }
+  24   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     43    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

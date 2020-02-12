@@ -1,0 +1,74 @@
+C51 COMPILER V9.53.0.0   RECEIVEMESSAGE                                                    05/16/2019 22:09:31 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE RECEIVEMESSAGE
+OBJECT MODULE PLACED IN ReceiveMessage.OBJ
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ReceiveMessage.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include "ReceiveMessage.h"
+   2          
+   3          unsigned char flag;
+   4          
+   5          void Init(void)   //串口配置
+   6          {
+   7   1          TMOD=0x20;    //定时器1，工作方式2              
+   8   1          TH1=0xfd;   //波特率为9600
+   9   1          TL1=0xfd;
+  10   1          PCON=0x00;              
+  11   1          TR1=1;        //定时器1开始工作 
+  12   1          SCON=0x50;    //0101 0000B，工作方式1,8位UART，波特率可变，允许接收             
+  13   1          RI = 0;
+  14   1          TI = 0;   
+  15   1      } 
+  16          
+  17          void delay(unsigned int i)
+  18          {
+  19   1        while(i--);
+  20   1      }
+  21          
+  22          void receive()      // 接收信息
+  23          {
+  24   1        while(RI==0)
+  25   1          ;
+  26   1        flag = SBUF;
+  27   1        RI = 0;
+  28   1      //  send(flag);
+  29   1      }
+  30          
+  31          void send(uchar ShowData)
+  32          {
+  33   1        SBUF=ShowData;      //写发送寄存器
+  34   1        while(TI==0)      //等待串行发送完成
+  35   1        {
+  36   2        ;
+  37   2        }
+  38   1        TI=0;           //对标志位清零
+  39   1      }
+  40          
+  41          int select()
+  42          {
+  43   1        if(flag == 1)   // 发生火灾
+  44   1          return 1;
+  45   1        else            // 未发生火灾
+  46   1          return 0;
+  47   1      }
+  48          
+  49          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     64    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+C51 COMPILER V9.53.0.0   RECEIVEMESSAGE                                                    05/16/2019 22:09:31 PAGE 2   
+
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      1    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

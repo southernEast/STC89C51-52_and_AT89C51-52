@@ -1,0 +1,78 @@
+C51 COMPILER V9.53.0.0   SENDMESSAGE                                                       05/25/2019 22:16:07 PAGE 1   
+
+
+C51 COMPILER V9.53.0.0, COMPILATION OF MODULE SENDMESSAGE
+OBJECT MODULE PLACED IN SendMessage.OBJ
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE SendMessage.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include "SendMessage.h"
+   2          
+   3          uchar flag;
+   4          
+   5          void Gas()
+   6          {
+   7   1        uchar i = 0;
+   8   1        if(gasDet == 0){          
+   9   2          Delay(100);
+  10   2          if(gasDet == 0){        // 检测到烟雾
+  11   3            led1 = 0;             // 点亮应急灯
+  12   3            led2 = 1;
+  13   3            for(i = 0; i < 10; i++)
+  14   3              Send(1);            // 发送信息
+  15   3          }
+  16   2        }
+  17   1        else{                     // 未检测到烟雾
+  18   2          led1 = 1;               // 关闭应急灯
+  19   2          led2 = 0;
+  20   2          Send(0);                // 发送信息
+  21   2        }
+  22   1      }
+  23          
+  24          void Delay(uint k)
+  25          {
+  26   1        uchar j;
+  27   1        while((k--)!=0)           
+  28   1        {
+  29   2          for(j=0;j<125;j++)
+  30   2            {;}
+  31   2        }
+  32   1      }
+  33          
+  34          
+  35          void Init(void)
+  36          {
+  37   1        TMOD=0x20;    //定时器1，工作方式2              
+  38   1        TH1=0xfd;   //波特率为9600
+  39   1        TL1=0xfd;
+  40   1        PCON=0x00;              
+  41   1        TR1=1;        //定时器1开始工作 
+  42   1        SCON=0x50;    //0101 0000B，工作方式1,8位UART，波特率可变，允许接收             
+  43   1        RI = 0;
+  44   1        TI = 0;           
+  45   1      }            
+  46                                  
+  47          void Send(uchar ShowData)
+  48          {
+  49   1        SBUF=ShowData;      //写发送寄存器
+  50   1        while(TI==0)      //等待串行发送完成
+  51   1          ;
+  52   1        TI=0;           //对标志位清零
+  53   1      }
+
+
+C51 COMPILER V9.53.0.0   SENDMESSAGE                                                       05/25/2019 22:16:07 PAGE 2   
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     99    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      1       1
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
